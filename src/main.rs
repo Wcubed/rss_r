@@ -2,8 +2,12 @@
 #![warn(rust_2018_idioms)]
 
 use actix_files::Files;
+use actix_web::dev::ServiceRequest;
 use actix_web::middleware::Logger;
 use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
+use actix_web_httpauth::extractors::bearer::{BearerAuth, Config};
+use actix_web_httpauth::extractors::AuthenticationError;
+use actix_web_httpauth::middleware::HttpAuthentication;
 use actix_web_lab::web::redirect;
 use log::{error, info, LevelFilter};
 use rustls::{Certificate, PrivateKey, ServerConfig};
@@ -11,6 +15,7 @@ use rustls_pemfile::{certs, pkcs8_private_keys};
 use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode};
 use std::fs::File;
 use std::io::BufReader;
+use std::pin::Pin;
 use std::sync::Mutex;
 
 #[actix_web::main]
@@ -37,14 +42,16 @@ async fn main() -> std::io::Result<()> {
     info!("Starting Https server at https://127.0.0.1:8443");
 
     HttpServer::new(move || {
+        let authenticator = HttpAuthentication::bearer(basic_auth_validator);
+
         App::new()
             .wrap(Logger::default())
             .app_data(counter.clone())
             .service(redirect("/", "/app/index.html"))
             .service(redirect("/app/", "/app/index.html"))
-            .service(web::scope("/api").service(hello_world))
             // This serves the rss_r_web webassembly application.
             .service(Files::new("/app", "resources/static"))
+            .service(web::scope("/api").wrap(authenticator).service(hello_world))
     })
     .bind_rustls("127.0.0.1:8443", rustls_config)?
     .run()
@@ -57,6 +64,28 @@ async fn hello_world(data: web::Data<AppStateCounter>) -> impl Responder {
     *counter += 1;
 
     HttpResponse::Ok().body(format!("Hello world! Counter: {counter}"))
+}
+
+async fn basic_auth_validator(
+    req: ServiceRequest,
+    credentials: BearerAuth,
+) -> Result<ServiceRequest, actix_web::Error> {
+    let config = req
+        .app_data::<Config>()
+        .map(|data| Pin::new(data).get_ref().clone())
+        .unwrap_or_else(Default::default);
+
+    if validate_token(credentials.token()) {
+        Ok(req)
+    } else {
+        Err(AuthenticationError::from(config).into())
+    }
+}
+
+/// TODO (Wybe 2022-07-10): Allow authenticating non-hardcoded users.
+/// TODO (Wybe 2022-07-10): Store the bearer token on the client site in http only cookies (aparently there are cookies that can only be sent along with requests, and not accessed).
+fn validate_token(bearer_token: &str) -> bool {
+    bearer_token == "a-test-token"
 }
 
 struct AppStateCounter {

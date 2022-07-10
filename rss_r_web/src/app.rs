@@ -4,6 +4,8 @@ use egui::{Align2, Context, Ui, Vec2, Visuals};
 use log::info;
 use poll_promise::Promise;
 
+const AUTHORIZATION_HEADER: &str = "Authorization";
+
 #[derive(Default, serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct RssApp {
@@ -52,7 +54,11 @@ impl eframe::App for RssApp {
             if (ui.button("Do http request")).clicked() {
                 // Testing http request code.
                 let (sender, promise) = Promise::new();
-                let request = ehttp::Request::get("../api/");
+                let mut request = ehttp::Request::get("../api/");
+                request.headers.insert(
+                    AUTHORIZATION_HEADER.to_owned(),
+                    format!("Bearer {}", "a-test-token"),
+                );
 
                 let ctx = ctx.clone();
                 ehttp::fetch(request, move |response| {
