@@ -11,18 +11,22 @@ const AUTHORIZATION_HEADER: &str = "Authorization";
 pub struct RssApp {
     config: Config,
     #[serde(skip)]
-    login: Login,
+    login_view: Option<Login>,
     #[serde(skip)]
     test_promise: Option<Promise<ehttp::Result<String>>>,
 }
 
 impl RssApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let app: RssApp = if let Some(storage) = cc.storage {
+        let mut app: RssApp = if let Some(storage) = cc.storage {
             eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
         } else {
             Default::default()
         };
+
+        // Always start at the login page.
+        // TODO (Wybe 2022-07-10): Maybe make some kind of page system, where you can switch between pages, and don't need to keep each page in a different variable.
+        app.login_view = Some(Login::default());
 
         let visuals = if app.config.dark_mode {
             Visuals::dark()
@@ -49,55 +53,60 @@ impl eframe::App for RssApp {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Hello World!");
+            if self.login_view.is_none() {
+                ui.heading("Hello World!");
 
-            if (ui.button("Do http request")).clicked() {
-                // Testing http request code.
-                let (sender, promise) = Promise::new();
-                let mut request = ehttp::Request::get("../api/");
-                request.headers.insert(
-                    AUTHORIZATION_HEADER.to_owned(),
-                    format!("Bearer {}", "a-test-token"),
-                );
+                if (ui.button("Do http request")).clicked() {
+                    // Testing http request code.
+                    let (sender, promise) = Promise::new();
+                    let request = ehttp::Request::get("../api/");
 
-                let ctx = ctx.clone();
-                ehttp::fetch(request, move |response| {
-                    ctx.request_repaint(); // Wake up UI thread.
+                    let ctx = ctx.clone();
+                    ehttp::fetch(request, move |response| {
+                        ctx.request_repaint(); // Wake up UI thread.
 
-                    let result =
-                        response.map(|response| response.text().unwrap_or_default().to_string());
+                        let result = response
+                            .map(|response| response.text().unwrap_or_default().to_string());
 
-                    sender.send(result);
-                });
-                self.test_promise = Some(promise);
-            }
+                        sender.send(result);
+                    });
+                    self.test_promise = Some(promise);
+                }
 
-            if let Some(promise) = &self.test_promise {
-                if let Some(result) = promise.ready() {
-                    match result {
-                        Ok(string) => {
-                            ui.label(string);
+                if let Some(promise) = &self.test_promise {
+                    if let Some(result) = promise.ready() {
+                        match result {
+                            Ok(string) => {
+                                ui.label(string);
+                            }
+                            Err(error) => {
+                                ui.colored_label(
+                                    egui::Color32::RED,
+                                    if error.is_empty() { "Error" } else { error },
+                                );
+                            }
                         }
-                        Err(error) => {
-                            ui.colored_label(
-                                egui::Color32::RED,
-                                if error.is_empty() { "Error" } else { error },
-                            );
-                        }
+                    } else {
+                        ui.spinner();
                     }
-                } else {
-                    ui.spinner();
                 }
             }
         });
 
-        egui::Window::new("Login")
-            .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
-            .resizable(false)
-            .collapsible(false)
-            .show(ctx, |ui| {
-                self.login.show(ui);
-            });
+        let mut logged_in = false;
+        if let Some(login) = &mut self.login_view {
+            egui::Window::new("Login")
+                .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
+                .resizable(false)
+                .collapsible(false)
+                .show(ctx, |ui| {
+                    logged_in = login.show(ctx, ui);
+                });
+        }
+
+        if logged_in {
+            self.login_view = None;
+        }
     }
 
     /// Called by the frame work to save state before shutdown.

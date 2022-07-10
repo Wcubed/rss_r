@@ -2,12 +2,11 @@
 #![warn(rust_2018_idioms)]
 
 use actix_files::Files;
-use actix_web::dev::ServiceRequest;
+use actix_web::cookie::{Cookie, SameSite};
+use actix_web::dev::{forward_ready, Service, ServiceRequest, ServiceResponse};
 use actix_web::middleware::Logger;
-use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
-use actix_web_httpauth::extractors::bearer::{BearerAuth, Config};
-use actix_web_httpauth::extractors::AuthenticationError;
-use actix_web_httpauth::middleware::HttpAuthentication;
+use actix_web::{get, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web_lab::__reexports::futures_util::future::LocalBoxFuture;
 use actix_web_lab::web::redirect;
 use log::{error, info, LevelFilter};
 use rustls::{Certificate, PrivateKey, ServerConfig};
@@ -15,9 +14,15 @@ use rustls_pemfile::{certs, pkcs8_private_keys};
 use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode};
 use std::fs::File;
 use std::io::BufReader;
-use std::pin::Pin;
 use std::sync::Mutex;
+use std::task::{Context, Poll};
 
+const AUTH_COOKIE_NAME: &str = "auth";
+
+/// TODO (Wybe 2022-07-10): Can we save the token on the client in a (httpOnly, Secure, SameSite=Strict) cookie?
+/// TODO (Wybe 2022-07-10): Allow authenticating non-hardcoded users.
+/// TODO (Wybe 2022-07-10): Store the bearer token on the client site in http only cookies (aparently there are cookies that can only be sent along with requests, and not accessed).
+/// TODO (Wybe 2022-07-10): Add some small banner that says this site uses cookies to authenticate? or is it not needed for authentication cookies.
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // TODO (Wybe 2022-07-10): Add application arguments or a config file that allows logging to
@@ -42,8 +47,6 @@ async fn main() -> std::io::Result<()> {
     info!("Starting Https server at https://127.0.0.1:8443");
 
     HttpServer::new(move || {
-        let authenticator = HttpAuthentication::bearer(basic_auth_validator);
-
         App::new()
             .wrap(Logger::default())
             .app_data(counter.clone())
@@ -51,7 +54,8 @@ async fn main() -> std::io::Result<()> {
             .service(redirect("/app/", "/app/index.html"))
             // This serves the rss_r_web webassembly application.
             .service(Files::new("/app", "resources/static"))
-            .service(web::scope("/api").wrap(authenticator).service(hello_world))
+            .service(login)
+            .service(web::scope("/api").service(hello_world))
     })
     .bind_rustls("127.0.0.1:8443", rustls_config)?
     .run()
@@ -59,33 +63,29 @@ async fn main() -> std::io::Result<()> {
 }
 
 #[get("/")]
-async fn hello_world(data: web::Data<AppStateCounter>) -> impl Responder {
+async fn hello_world(data: web::Data<AppStateCounter>, req: HttpRequest) -> impl Responder {
     let mut counter = data.counter.lock().unwrap();
     *counter += 1;
+
+    if let Some(cookie) = req.cookie(AUTH_COOKIE_NAME) {
+        info!("Cookie: {}", cookie.value())
+    }
 
     HttpResponse::Ok().body(format!("Hello world! Counter: {counter}"))
 }
 
-async fn basic_auth_validator(
-    req: ServiceRequest,
-    credentials: BearerAuth,
-) -> Result<ServiceRequest, actix_web::Error> {
-    let config = req
-        .app_data::<Config>()
-        .map(|data| Pin::new(data).get_ref().clone())
-        .unwrap_or_else(Default::default);
+#[get("/login")]
+async fn login() -> impl Responder {
+    let auth_cookie = Cookie::build(AUTH_COOKIE_NAME, "test")
+        // Don't send this over unsecure channels.
+        .secure(true)
+        // Only send this if on the same site.
+        .same_site(SameSite::Strict)
+        // Javascript is not allowed to see this.
+        .http_only(true)
+        .finish();
 
-    if validate_token(credentials.token()) {
-        Ok(req)
-    } else {
-        Err(AuthenticationError::from(config).into())
-    }
-}
-
-/// TODO (Wybe 2022-07-10): Allow authenticating non-hardcoded users.
-/// TODO (Wybe 2022-07-10): Store the bearer token on the client site in http only cookies (aparently there are cookies that can only be sent along with requests, and not accessed).
-fn validate_token(bearer_token: &str) -> bool {
-    bearer_token == "a-test-token"
+    HttpResponse::Ok().cookie(auth_cookie).body("")
 }
 
 struct AppStateCounter {
