@@ -7,6 +7,7 @@ use actix_web::middleware::Logger;
 use actix_web::{get, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use actix_web_lab::web::redirect;
 use log::{error, info, LevelFilter};
+use rss_com_lib::{PASSWORD_HEADER, USER_ID_HEADER};
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode};
@@ -77,18 +78,31 @@ async fn hello_world(data: web::Data<AppStateCounter>, req: HttpRequest) -> impl
 
 /// Validates user id and password, and if they are valid sets the authentication cookie.
 #[get("/login")]
-async fn login() -> impl Responder {
+async fn login(req: HttpRequest) -> impl Responder {
     // TODO (Wybe 2022-07-10): Add middleware for checking a login token.
-    let auth_cookie = auth_cookie("test-token");
 
-    HttpResponse::Ok().cookie(auth_cookie).finish()
+    if let (Some(user_id), Some(password)) = (
+        req.headers().get(USER_ID_HEADER),
+        req.headers().get(PASSWORD_HEADER),
+    ) {
+        // TODO (Wybe 2022-07-10): Allow registering and remembering users and such.
+        if user_id == "test" && password == "testing" {
+            // Login valid, set the auth cookie so the user doesn't need to login all the time.
+            let auth_cookie = auth_cookie("test-token");
+            HttpResponse::Ok().cookie(auth_cookie).finish()
+        } else {
+            HttpResponse::Unauthorized().finish()
+        }
+    } else {
+        HttpResponse::Unauthorized().finish()
+    }
 }
 
 /// Removes the authentication cookie, if it exists.
 #[get("/logout")]
 async fn logout(req: HttpRequest) -> impl Responder {
     if let Some(mut cookie) = req.cookie(AUTH_COOKIE_NAME) {
-        // TODO (Wybe 2022-07-10): Invalidate this authentication token.
+        // TODO (Wybe 2022-07-10): Invalidate this authentication token on the server end.
         cookie.make_removal();
 
         HttpResponse::Ok().cookie(cookie).finish()

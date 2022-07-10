@@ -1971,6 +1971,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "rss_com_lib"
+version = "0.1.0"
+
+[[package]]
 name = "rss_r"
 version = "0.1.0"
 dependencies = [
@@ -1979,6 +1983,7 @@ dependencies = [
  "actix-web-httpauth",
  "actix-web-lab",
  "log",
+ "rss_com_lib",
  "rustls",
  "rustls-pemfile",
  "simplelog",
@@ -1995,6 +2000,7 @@ dependencies = [
  "ehttp",
  "log",
  "poll-promise",
+ "rss_com_lib",
  "serde",
  "tracing-wasm",
 ]

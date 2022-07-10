@@ -1,6 +1,7 @@
 use egui::{Context, TextEdit, Ui};
 use log::info;
 use poll_promise::Promise;
+use rss_com_lib::{PASSWORD_HEADER, USER_ID_HEADER};
 
 const LOGIN_URL: &str = "../api/login";
 
@@ -8,7 +9,7 @@ const LOGIN_URL: &str = "../api/login";
 pub struct Login {
     username: String,
     password: String,
-    login_promise: Option<Promise<ehttp::Result<()>>>,
+    login_promise: Option<Promise<ehttp::Result<ehttp::Response>>>,
 }
 
 impl Login {
@@ -21,9 +22,12 @@ impl Login {
         if let Some(promise) = &self.login_promise {
             if let Some(result) = promise.ready() {
                 match result {
-                    Ok(()) => {
-                        info!("Logged in");
-                        logged_in = true;
+                    Ok(response) => {
+                        if response.ok {
+                            logged_in = true;
+                        } else {
+                            ui.colored_label(egui::Color32::RED, "Invalid username or password");
+                        }
                     }
                     Err(error) => {
                         ui.colored_label(
@@ -54,15 +58,21 @@ impl Login {
 
         if log_in_clicked || (response.lost_focus() && ui.input().key_pressed(egui::Key::Enter)) {
             let (sender, promise) = Promise::new();
-            let request = ehttp::Request::get(LOGIN_URL);
+            let mut request = ehttp::Request::get(LOGIN_URL);
+
+            // TODO (Wybe 2022-07-10): Should the id and password be base64 encoded?
+            request
+                .headers
+                .insert(USER_ID_HEADER.to_string(), self.username.to_string());
+            request
+                .headers
+                .insert(PASSWORD_HEADER.to_string(), self.password.to_string());
 
             let ctx = ctx.clone();
             ehttp::fetch(request, move |response| {
                 ctx.request_repaint(); // Wake up UI thread.
 
-                let result = response.map(|response| ());
-
-                sender.send(result);
+                sender.send(response);
             });
             self.login_promise = Some(promise);
 

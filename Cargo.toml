@@ -6,6 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+rss_com_lib = { path = "rss_com_lib" }
+
 actix-web = { version = "4", features = ["rustls"] }
 actix-web-lab = "0.16.4"
 actix-files = "0.6.1"
