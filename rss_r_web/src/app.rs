@@ -4,16 +4,17 @@ use egui::{Align2, Context, Ui, Vec2, Visuals};
 use log::info;
 use poll_promise::Promise;
 
-const AUTHORIZATION_HEADER: &str = "Authorization";
-
 #[derive(Default, serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct RssApp {
     config: Config,
     #[serde(skip)]
     login_view: Option<Login>,
+    /// TODO (Wybe 2022-07-10): Add a convenience struct of some kind for promises.
     #[serde(skip)]
     test_promise: Option<Promise<ehttp::Result<String>>>,
+    #[serde(skip)]
+    logout_promise: Option<Promise<ehttp::Result<()>>>,
 }
 
 impl RssApp {
@@ -49,6 +50,41 @@ impl eframe::App for RssApp {
                 }
 
                 ui.separator();
+
+                if self.login_view.is_none() {
+                    if ui.button("Log out").clicked() {
+                        let (sender, promise) = Promise::new();
+                        let request = ehttp::Request::get("../api/logout");
+
+                        let ctx = ctx.clone();
+                        ehttp::fetch(request, move |response| {
+                            ctx.request_repaint(); // Wake up UI thread.
+
+                            let result = response.map(|response| ());
+
+                            sender.send(result);
+                        });
+                        self.logout_promise = Some(promise);
+                    }
+                }
+
+                if let Some(promise) = &self.logout_promise {
+                    if let Some(result) = promise.ready() {
+                        match result {
+                            Ok(()) => {
+                                info!("Logged out");
+                            }
+                            Err(error) => {
+                                ui.colored_label(
+                                    egui::Color32::RED,
+                                    if error.is_empty() { "Error" } else { error },
+                                );
+                            }
+                        }
+                    } else {
+                        ui.spinner();
+                    }
+                }
             });
         });
 

@@ -2,7 +2,7 @@ use egui::{Context, TextEdit, Ui};
 use log::info;
 use poll_promise::Promise;
 
-const LOGIN_URL: &str = "../login";
+const LOGIN_URL: &str = "../api/login";
 
 #[derive(Default)]
 pub struct Login {

@@ -3,10 +3,8 @@
 
 use actix_files::Files;
 use actix_web::cookie::{Cookie, SameSite};
-use actix_web::dev::{forward_ready, Service, ServiceRequest, ServiceResponse};
 use actix_web::middleware::Logger;
 use actix_web::{get, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
-use actix_web_lab::__reexports::futures_util::future::LocalBoxFuture;
 use actix_web_lab::web::redirect;
 use log::{error, info, LevelFilter};
 use rustls::{Certificate, PrivateKey, ServerConfig};
@@ -15,7 +13,6 @@ use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode};
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::Mutex;
-use std::task::{Context, Poll};
 
 const AUTH_COOKIE_NAME: &str = "auth";
 
@@ -54,8 +51,12 @@ async fn main() -> std::io::Result<()> {
             .service(redirect("/app/", "/app/index.html"))
             // This serves the rss_r_web webassembly application.
             .service(Files::new("/app", "resources/static"))
-            .service(login)
-            .service(web::scope("/api").service(hello_world))
+            .service(
+                web::scope("/api")
+                    .service(login)
+                    .service(logout)
+                    .service(hello_world),
+            )
     })
     .bind_rustls("127.0.0.1:8443", rustls_config)?
     .run()
@@ -74,18 +75,37 @@ async fn hello_world(data: web::Data<AppStateCounter>, req: HttpRequest) -> impl
     HttpResponse::Ok().body(format!("Hello world! Counter: {counter}"))
 }
 
+/// Validates user id and password, and if they are valid sets the authentication cookie.
 #[get("/login")]
 async fn login() -> impl Responder {
-    let auth_cookie = Cookie::build(AUTH_COOKIE_NAME, "test")
+    // TODO (Wybe 2022-07-10): Add middleware for checking a login token.
+    let auth_cookie = auth_cookie("test-token");
+
+    HttpResponse::Ok().cookie(auth_cookie).finish()
+}
+
+/// Removes the authentication cookie, if it exists.
+#[get("/logout")]
+async fn logout(req: HttpRequest) -> impl Responder {
+    if let Some(mut cookie) = req.cookie(AUTH_COOKIE_NAME) {
+        // TODO (Wybe 2022-07-10): Invalidate this authentication token.
+        cookie.make_removal();
+
+        HttpResponse::Ok().cookie(cookie).finish()
+    } else {
+        HttpResponse::Unauthorized().finish()
+    }
+}
+
+fn auth_cookie(token: &str) -> Cookie {
+    Cookie::build(AUTH_COOKIE_NAME, token)
         // Don't send this over unsecure channels.
         .secure(true)
         // Only send this if on the same site.
         .same_site(SameSite::Strict)
         // Javascript is not allowed to see this.
         .http_only(true)
-        .finish();
-
-    HttpResponse::Ok().cookie(auth_cookie).body("")
+        .finish()
 }
 
 struct AppStateCounter {
