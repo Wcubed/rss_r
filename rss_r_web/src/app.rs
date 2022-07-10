@@ -1,17 +1,14 @@
-use eframe::{App, Frame};
+use eframe::Frame;
 use egui::{Context, Ui, Visuals};
 use log::info;
+use poll_promise::Promise;
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Default, serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct RssApp {
-    dark_mode: bool,
-}
-
-impl Default for RssApp {
-    fn default() -> Self {
-        RssApp { dark_mode: true }
-    }
+    config: Config,
+    #[serde(skip)]
+    test_promise: Option<Promise<ehttp::Result<String>>>,
 }
 
 impl RssApp {
@@ -22,7 +19,7 @@ impl RssApp {
             Default::default()
         };
 
-        let visuals = if app.dark_mode {
+        let visuals = if app.config.dark_mode {
             Visuals::dark()
         } else {
             Visuals::light()
@@ -39,7 +36,7 @@ impl eframe::App for RssApp {
             ui.horizontal(|ui| {
                 if let Some(dark_mode) = global_dark_light_mode_switch(ui) {
                     info!("Dark mode: {dark_mode}");
-                    self.dark_mode = dark_mode;
+                    self.config.dark_mode = dark_mode;
                 }
 
                 ui.separator();
@@ -48,13 +45,60 @@ impl eframe::App for RssApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Hello World!");
+
+            if (ui.button("Do http request")).clicked() {
+                // Testing http request code.
+                let (sender, promise) = Promise::new();
+                let request = ehttp::Request::get("../api/");
+
+                let ctx = ctx.clone();
+                ehttp::fetch(request, move |response| {
+                    ctx.request_repaint(); // Wake up UI thread.
+
+                    let result =
+                        response.map(|response| response.text().unwrap_or_default().to_string());
+
+                    sender.send(result);
+                });
+                self.test_promise = Some(promise);
+            }
+
+            if let Some(promise) = &self.test_promise {
+                if let Some(result) = promise.ready() {
+                    match result {
+                        Ok(string) => {
+                            ui.label(string);
+                        }
+                        Err(error) => {
+                            ui.colored_label(
+                                egui::Color32::RED,
+                                if error.is_empty() { "Error" } else { error },
+                            );
+                        }
+                    }
+                } else {
+                    ui.spinner();
+                }
+            }
         });
     }
 
     /// Called by the frame work to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        info!("Saving...");
-        eframe::set_value(storage, eframe::APP_KEY, self);
+        info!("Saving");
+        eframe::set_value(storage, eframe::APP_KEY, &self.config);
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(default)] // if we add new fields, give them default values when deserializing old state
+struct Config {
+    dark_mode: bool,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config { dark_mode: true }
     }
 }
 

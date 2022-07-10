@@ -2,6 +2,7 @@
 #![warn(rust_2018_idioms)]
 
 mod app;
+
 pub use app::RssApp;
 use log::Level;
 
@@ -18,7 +19,7 @@ pub fn start(canvas_id: &str) -> Result<(), eframe::wasm_bindgen::JsValue> {
     // Make sure panics are logged using `console.error`.
     console_error_panic_hook::set_once();
 
-    console_log::init_with_level(Level::Debug);
+    console_log::init_with_level(Level::Debug).unwrap();
 
     // Redirect tracing to console.log and friends:
     tracing_wasm::set_as_global_default();

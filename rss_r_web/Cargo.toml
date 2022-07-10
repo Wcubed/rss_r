@@ -13,6 +13,10 @@ serde = { version = "1", features = ["derive"] }
 log = "0.4.17"
 console_log = "0.2.0" # Logs to web console
 
+ehttp = "0.2.0"
+poll-promise = "0.1.0"
+
+
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.6"
