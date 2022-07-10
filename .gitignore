@@ -1,3 +1,7 @@
+# Target for the generated wasm files for rss_r_web
+resources/static/wasm/
+
+### Intellij
 .idea/
 
 ### Rust template

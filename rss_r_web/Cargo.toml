@@ -1,0 +1,17 @@
+[package]
+name = "rss_r_web"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+egui = "0.18.0"
+eframe = { version = "0.18.0", features = ["persistence"] }
+serde = { version = "1", features = ["derive"] } # You only need this if you want app persistence
+
+# web:
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.6"
+tracing-wasm = "0.2"

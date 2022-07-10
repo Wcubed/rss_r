@@ -4,6 +4,7 @@
 use actix_files::Files;
 use actix_web::middleware::Logger;
 use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
+use actix_web_lab::web::redirect;
 use log::{error, info, LevelFilter};
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
@@ -39,8 +40,10 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(Logger::default())
             .app_data(counter.clone())
-            .service(hello_world)
-            .service(Files::new("/static", "static"))
+            .service(redirect("/", "/app/index.html"))
+            .service(web::scope("/api").service(hello_world))
+            // This serves the rss_r_web webassembly application.
+            .service(Files::new("/app", "resources/static"))
     })
     .bind_rustls("127.0.0.1:8443", rustls_config)?
     .run()
