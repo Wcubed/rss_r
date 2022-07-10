@@ -41,6 +41,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::default())
             .app_data(counter.clone())
             .service(redirect("/", "/app/index.html"))
+            .service(redirect("/app/", "/app/index.html"))
             .service(web::scope("/api").service(hello_world))
             // This serves the rss_r_web webassembly application.
             .service(Files::new("/app", "resources/static"))
