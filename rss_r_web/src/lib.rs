@@ -2,6 +2,7 @@
 #![warn(rust_2018_idioms)]
 
 mod app;
+mod login;
 
 pub use app::RssApp;
 use log::Level;

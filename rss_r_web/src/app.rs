@@ -1,5 +1,6 @@
+use crate::login::Login;
 use eframe::Frame;
-use egui::{Context, Ui, Visuals};
+use egui::{Align2, Context, Ui, Vec2, Visuals};
 use log::info;
 use poll_promise::Promise;
 
@@ -7,6 +8,8 @@ use poll_promise::Promise;
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct RssApp {
     config: Config,
+    #[serde(skip)]
+    login: Login,
     #[serde(skip)]
     test_promise: Option<Promise<ehttp::Result<String>>>,
 }
@@ -81,6 +84,14 @@ impl eframe::App for RssApp {
                 }
             }
         });
+
+        egui::Window::new("Login")
+            .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
+            .resizable(false)
+            .collapsible(false)
+            .show(ctx, |ui| {
+                self.login.show(ui);
+            });
     }
 
     /// Called by the frame work to save state before shutdown.
