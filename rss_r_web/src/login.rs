@@ -1,5 +1,4 @@
-use egui::{Context, TextEdit, Ui};
-use log::info;
+use egui::{Button, Context, TextEdit, Ui};
 use poll_promise::Promise;
 use rss_com_lib::{PASSWORD_HEADER, USER_ID_HEADER};
 
@@ -45,16 +44,26 @@ impl Login {
     }
 
     fn show_login_fields(&mut self, ctx: &Context, ui: &mut Ui) {
+        let login_interactive = if let Some(promise) = &self.login_promise {
+            promise.ready().is_some()
+        } else {
+            true
+        };
+
         TextEdit::singleline(&mut self.username)
             .hint_text("Username")
+            .interactive(login_interactive)
             .show(ui);
         let response = TextEdit::singleline(&mut self.password)
             .hint_text("Password")
             .password(true)
+            .interactive(login_interactive)
             .show(ui)
             .response;
 
-        let log_in_clicked = ui.button("Log in").clicked();
+        let log_in_clicked = ui
+            .add_enabled(login_interactive, Button::new("Log in"))
+            .clicked();
 
         if log_in_clicked || (response.lost_focus() && ui.input().key_pressed(egui::Key::Enter)) {
             let (sender, promise) = Promise::new();
