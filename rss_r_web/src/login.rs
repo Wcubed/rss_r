@@ -1,40 +1,69 @@
+use crate::login::State::LoggedIn;
 use crate::requests::{ApiEndpoint, Requests, Response};
-use egui::{Button, Context, TextEdit, Ui};
+use egui::{Button, TextEdit, Ui};
 use log::info;
-use poll_promise::Promise;
 use rss_com_lib::{PASSWORD_HEADER, USER_ID_HEADER};
 
 #[derive(Default)]
 pub struct Login {
     username: String,
     password: String,
-    invalid_user_or_password: bool,
+    state: State,
+    show_invalid_user_or_password_message: bool,
 }
 
 impl Login {
     /// Returns `true` if the login is successful.
     pub fn show(&mut self, ui: &mut Ui, requests: &mut Requests) -> bool {
-        self.show_login_fields(ui, requests);
+        match self.state {
+            State::New => {
+                // Test whether the identity cookie is still valid, by performing a login
+                // request without username and password.
+                requests.new_empty_request(ApiEndpoint::Login);
+                self.state = State::TryIdentityCookieLogin;
 
-        let mut logged_in = false;
-
-        if requests.has_request(ApiEndpoint::Login) {
-            let response = requests.ready(ApiEndpoint::Login);
-            if let Some(Response::Ok(_)) = response {
-                info!("Logged in");
-                self.invalid_user_or_password = false;
-                logged_in = true;
-            } else if let Some(Response::Unauthorized) = response {
-                self.invalid_user_or_password = true;
-            } else {
-                self.invalid_user_or_password = false;
-                ui.spinner();
+                false
             }
-        } else if self.invalid_user_or_password {
-            ui.colored_label(egui::Color32::RED, "Invalid username or password");
-        }
+            State::TryIdentityCookieLogin => {
+                if requests.has_request(ApiEndpoint::Login) {
+                    if let Some(response) = requests.ready(ApiEndpoint::Login) {
+                        if let Response::Ok(_) = response {
+                            // Identity cookie login OK.
+                            self.state = LoggedIn
+                        } else {
+                            self.state = State::UsernameAndPasswordLogin;
+                        }
+                    } else {
+                        ui.spinner();
+                    }
+                } else {
+                    self.state = State::UsernameAndPasswordLogin;
+                }
+                false
+            }
+            State::UsernameAndPasswordLogin => {
+                self.show_login_fields(ui, requests);
 
-        logged_in
+                if requests.has_request(ApiEndpoint::Login) {
+                    let response = requests.ready(ApiEndpoint::Login);
+                    if let Some(Response::Ok(_)) = response {
+                        info!("Logged in");
+                        self.show_invalid_user_or_password_message = false;
+                        self.state = State::LoggedIn;
+                    } else if let Some(Response::Unauthorized) = response {
+                        self.show_invalid_user_or_password_message = true;
+                    } else {
+                        self.show_invalid_user_or_password_message = false;
+                        ui.spinner();
+                    }
+                } else if self.show_invalid_user_or_password_message {
+                    ui.colored_label(egui::Color32::RED, "Invalid username or password");
+                }
+
+                false
+            }
+            State::LoggedIn => true,
+        }
     }
 
     fn show_login_fields(&mut self, ui: &mut Ui, requests: &mut Requests) {
@@ -67,5 +96,18 @@ impl Login {
             self.username = String::new();
             self.password = String::new();
         }
+    }
+}
+
+enum State {
+    New,
+    TryIdentityCookieLogin,
+    UsernameAndPasswordLogin,
+    LoggedIn,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        State::New
     }
 }

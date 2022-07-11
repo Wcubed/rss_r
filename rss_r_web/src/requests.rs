@@ -1,4 +1,3 @@
-use log::info;
 use poll_promise::Promise;
 use std::collections::HashMap;
 
