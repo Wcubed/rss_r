@@ -1,21 +1,32 @@
 #![deny(unsafe_code)]
 #![warn(rust_2018_idioms)]
 
+mod auth_middleware;
+mod error;
+mod users;
+
+use crate::auth_middleware::{
+    AuthData, AuthenticateMiddlewareFactory, Authenticated, AUTH_COOKIE_NAME,
+};
 use actix_files::Files;
-use actix_web::cookie::{Cookie, SameSite};
+use actix_identity::{CookieIdentityPolicy, Identity, IdentityService};
+use actix_web::cookie::time::Duration;
+use actix_web::cookie::SameSite;
 use actix_web::middleware::Logger;
 use actix_web::{get, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use actix_web_lab::web::redirect;
-use log::{error, info, LevelFilter};
+use log::{error, info, warn, LevelFilter};
 use rss_com_lib::{PASSWORD_HEADER, USER_ID_HEADER};
-use rustls::{Certificate, PrivateKey, ServerConfig};
+use rustls::{Certificate, PrivateKey};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode};
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::Mutex;
 
-const AUTH_COOKIE_NAME: &str = "auth";
+/// TODO (Wybe 2022-07-10): Add configuration options for ip address and port.
+const IP: &str = "127.0.0.1:8443";
+const LOGIN_DEADLINE: Duration = Duration::days(3);
 
 /// TODO (Wybe 2022-07-10): Can we save the token on the client in a (httpOnly, Secure, SameSite=Strict) cookie?
 /// TODO (Wybe 2022-07-10): Allow authenticating non-hardcoded users.
@@ -42,54 +53,71 @@ async fn main() -> std::io::Result<()> {
         counter: Mutex::new(0),
     });
 
-    info!("Starting Https server at https://127.0.0.1:8443");
+    info!("Starting Https server at https://{IP}");
 
     HttpServer::new(move || {
+        // TODO (Wybe 2022-07-11): Add an actual key?
+        let identity_policy = CookieIdentityPolicy::new(&[0; 32])
+            .name(AUTH_COOKIE_NAME)
+            // Only transmit the cookie over secure connections.
+            .secure(true)
+            // Javascript is not allowed to see this cookie.
+            .http_only(true)
+            // No cross-site sending.
+            .same_site(SameSite::Strict)
+            // This is the maximum time that a login cookie is valid.
+            // After this time the user has to log in again.
+            .login_deadline(LOGIN_DEADLINE);
+
+        let auth_data = AuthData;
+
         App::new()
             .wrap(Logger::default())
             .app_data(counter.clone())
             .service(redirect("/", "/app/index.html"))
             .service(redirect("/app/", "/app/index.html"))
-            // This serves the rss_r_web webassembly application.
+            // This serves the static files of the rss_r_web webassembly application.
             .service(Files::new("/app", "resources/static"))
             .service(
                 web::scope("/api")
+                    .wrap(AuthenticateMiddlewareFactory::new(auth_data))
+                    .wrap(IdentityService::new(identity_policy))
                     .service(login)
                     .service(logout)
                     .service(hello_world),
             )
     })
-    .bind_rustls("127.0.0.1:8443", rustls_config)?
+    .bind_rustls(IP, rustls_config)?
     .run()
     .await
 }
 
 #[get("/")]
-async fn hello_world(data: web::Data<AppStateCounter>, req: HttpRequest) -> impl Responder {
+async fn hello_world(data: web::Data<AppStateCounter>, auth: Authenticated) -> impl Responder {
     let mut counter = data.counter.lock().unwrap();
     *counter += 1;
-
-    if let Some(cookie) = req.cookie(AUTH_COOKIE_NAME) {
-        info!("Cookie: {}", cookie.value())
-    }
 
     HttpResponse::Ok().body(format!("Hello world! Counter: {counter}"))
 }
 
 /// Validates user id and password, and if they are valid sets the authentication cookie.
 #[get("/login")]
-async fn login(req: HttpRequest) -> impl Responder {
+async fn login(req: HttpRequest, id: Identity) -> impl Responder {
     // TODO (Wybe 2022-07-10): Add middleware for checking a login token.
 
-    if let (Some(user_id), Some(password)) = (
-        req.headers().get(USER_ID_HEADER),
+    if let (Some(user_name), Some(password)) = (
+        req.headers()
+            .get(USER_ID_HEADER)
+            .and_then(|id| id.to_str().ok()),
         req.headers().get(PASSWORD_HEADER),
     ) {
         // TODO (Wybe 2022-07-10): Allow registering and remembering users and such.
-        if user_id == "test" && password == "testing" {
+        if user_name == "test" && password == "testing" {
+            info!("Logging in `{}`", user_name);
             // Login valid, set the auth cookie so the user doesn't need to login all the time.
-            let auth_cookie = auth_cookie("test-token");
-            HttpResponse::Ok().cookie(auth_cookie).finish()
+            // TODO (Wybe 2022-07-11): Generate and remember the session id somewhere.
+            id.remember("0".to_string());
+            HttpResponse::Ok().finish()
         } else {
             HttpResponse::Unauthorized().finish()
         }
@@ -98,28 +126,13 @@ async fn login(req: HttpRequest) -> impl Responder {
     }
 }
 
-/// Removes the authentication cookie, if it exists.
+/// Removes the authentication cookie
 #[get("/logout")]
-async fn logout(req: HttpRequest) -> impl Responder {
-    if let Some(mut cookie) = req.cookie(AUTH_COOKIE_NAME) {
-        // TODO (Wybe 2022-07-10): Invalidate this authentication token on the server end.
-        cookie.make_removal();
+async fn logout(id: Identity, auth: Authenticated) -> impl Responder {
+    info!("Logging out `{}`", auth.user_name());
 
-        HttpResponse::Ok().cookie(cookie).finish()
-    } else {
-        HttpResponse::Unauthorized().finish()
-    }
-}
-
-fn auth_cookie(token: &str) -> Cookie {
-    Cookie::build(AUTH_COOKIE_NAME, token)
-        // Don't send this over unsecure channels.
-        .secure(true)
-        // Only send this if on the same site.
-        .same_site(SameSite::Strict)
-        // Javascript is not allowed to see this.
-        .http_only(true)
-        .finish()
+    id.forget();
+    HttpResponse::Ok().finish()
 }
 
 struct AppStateCounter {
@@ -127,7 +140,7 @@ struct AppStateCounter {
 }
 
 fn load_rustls_config() -> rustls::ServerConfig {
-    let config = ServerConfig::builder()
+    let config = rustls::ServerConfig::builder()
         .with_safe_defaults()
         .with_no_client_auth();
 

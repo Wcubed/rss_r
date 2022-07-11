@@ -60,7 +60,7 @@ impl eframe::App for RssApp {
                         ehttp::fetch(request, move |response| {
                             ctx.request_repaint(); // Wake up UI thread.
 
-                            let result = response.map(|response| ());
+                            let result = response.map(|_response| ());
 
                             sender.send(result);
                         });
