@@ -95,9 +95,35 @@ impl std::ops::Deref for Authenticated {
     }
 }
 
+pub struct MaybeAuthenticated(Option<AuthenticationInfo>);
+
+impl MaybeAuthenticated {
+    pub fn is_some(&self) -> bool {
+        self.0.is_some()
+    }
+
+    pub fn inner(&self) -> &Option<AuthenticationInfo> {
+        &self.0
+    }
+}
+
+impl FromRequest for MaybeAuthenticated {
+    type Error = Error;
+    type Future = Ready<Result<Self, Self::Error>>;
+
+    fn from_request(
+        req: &actix_web::HttpRequest,
+        _payload: &mut actix_web::dev::Payload,
+    ) -> Self::Future {
+        let value = req.extensions().get::<AuthenticationInfo>().cloned();
+        ready(Ok(MaybeAuthenticated(value)))
+    }
+}
+
 /// Checks whether a user is logged in using an identity cookie.
 /// Adds the [AuthenticationInfo] to the request if the user is logged in.
 /// Services can require the user to be logged in by requiring [Authenticated] as parameter.
+/// If the user is not _required_ to be logged in, one can use [MaybeAuthenticated] instead.
 pub struct AuthenticateMiddleware<S> {
     auth_data: Rc<AuthData>,
     service: Rc<S>,

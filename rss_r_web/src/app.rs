@@ -7,6 +7,7 @@ use poll_promise::Promise;
 #[derive(Default, serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct RssApp {
+    // TODO (Wybe 2022-07-11): Store config server side? And retrieve on log-in?
     config: Config,
     #[serde(skip)]
     login_view: Option<Login>,

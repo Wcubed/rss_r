@@ -6,7 +6,7 @@ mod error;
 mod users;
 
 use crate::auth_middleware::{
-    AuthData, AuthenticateMiddlewareFactory, Authenticated, AUTH_COOKIE_NAME,
+    AuthData, AuthenticateMiddlewareFactory, Authenticated, MaybeAuthenticated, AUTH_COOKIE_NAME,
 };
 use actix_files::Files;
 use actix_identity::{CookieIdentityPolicy, Identity, IdentityService};
@@ -100,10 +100,16 @@ async fn hello_world(data: web::Data<AppStateCounter>, auth: Authenticated) -> i
     HttpResponse::Ok().body(format!("Hello world! Counter: {counter}"))
 }
 
-/// Validates user id and password, and if they are valid sets the authentication cookie.
+/// Validates user identity cookie.
+/// If there is no user identity cookie:
+/// Validates user id and password, and sets an identity cookie if they are valid.
 #[get("/login")]
-async fn login(req: HttpRequest, id: Identity) -> impl Responder {
-    // TODO (Wybe 2022-07-10): Add middleware for checking a login token.
+async fn login(req: HttpRequest, id: Identity, maybe_auth: MaybeAuthenticated) -> impl Responder {
+    if let Some(auth) = maybe_auth.inner() {
+        info!("Logging in `{}` with identity cookie", auth.user_name());
+        // Let the client know that the cookie is valid.
+        return HttpResponse::Ok().finish();
+    }
 
     if let (Some(user_name), Some(password)) = (
         req.headers()
@@ -113,7 +119,7 @@ async fn login(req: HttpRequest, id: Identity) -> impl Responder {
     ) {
         // TODO (Wybe 2022-07-10): Allow registering and remembering users and such.
         if user_name == "test" && password == "testing" {
-            info!("Logging in `{}`", user_name);
+            info!("Logging in `{}` with password", user_name);
             // Login valid, set the auth cookie so the user doesn't need to login all the time.
             // TODO (Wybe 2022-07-11): Generate and remember the session id somewhere.
             id.remember("0".to_string());
