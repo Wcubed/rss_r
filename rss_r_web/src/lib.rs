@@ -3,6 +3,7 @@
 
 mod app;
 mod login;
+mod requests;
 
 pub use app::RssApp;
 use log::Level;

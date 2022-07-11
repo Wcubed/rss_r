@@ -1,48 +1,45 @@
 use crate::login::Login;
+use crate::requests::{ApiEndpoint, Requests, Response};
 use eframe::Frame;
 use egui::{Align2, Context, Ui, Vec2, Visuals};
 use log::info;
-use poll_promise::Promise;
 
-#[derive(Default, serde::Deserialize, serde::Serialize)]
-#[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct RssApp {
     // TODO (Wybe 2022-07-11): Store config server side? And retrieve on log-in?
     config: Config,
-    #[serde(skip)]
     login_view: Option<Login>,
-    /// TODO (Wybe 2022-07-10): Add a convenience struct of some kind for promises.
-    #[serde(skip)]
-    test_promise: Option<Promise<ehttp::Result<String>>>,
-    #[serde(skip)]
-    logout_promise: Option<Promise<ehttp::Result<()>>>,
+    requests: Requests,
 }
 
 impl RssApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let mut app: RssApp = if let Some(storage) = cc.storage {
+        let config: Config = if let Some(storage) = cc.storage {
             eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
         } else {
             Default::default()
         };
 
-        // Always start at the login page.
-        // TODO (Wybe 2022-07-10): Maybe make some kind of page system, where you can switch between pages, and don't need to keep each page in a different variable.
-        app.login_view = Some(Login::default());
-
-        let visuals = if app.config.dark_mode {
+        let visuals = if config.dark_mode {
             Visuals::dark()
         } else {
             Visuals::light()
         };
         cc.egui_ctx.set_visuals(visuals);
 
-        app
+        RssApp {
+            config,
+            // TODO (Wybe 2022-07-10): Maybe make some kind of page system, where you can switch between pages, and don't need to keep each page in a different variable.
+            login_view: Some(Login::default()),
+            requests: Requests::new(cc.egui_ctx.clone()),
+        }
     }
 }
 
 impl eframe::App for RssApp {
     fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
+        // Update any outstanding http requests.
+        self.requests.poll();
+
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if let Some(dark_mode) = global_dark_light_mode_switch(ui) {
@@ -52,39 +49,15 @@ impl eframe::App for RssApp {
 
                 ui.separator();
 
-                if self.login_view.is_none() {
-                    if ui.button("Log out").clicked() {
-                        let (sender, promise) = Promise::new();
-                        let request = ehttp::Request::get("../api/logout");
-
-                        let ctx = ctx.clone();
-                        ehttp::fetch(request, move |response| {
-                            ctx.request_repaint(); // Wake up UI thread.
-
-                            let result = response.map(|_response| ());
-
-                            sender.send(result);
-                        });
-                        self.logout_promise = Some(promise);
-                    }
-                }
-
-                if let Some(promise) = &self.logout_promise {
-                    if let Some(result) = promise.ready() {
-                        match result {
-                            Ok(()) => {
-                                info!("Logged out");
-                            }
-                            Err(error) => {
-                                ui.colored_label(
-                                    egui::Color32::RED,
-                                    if error.is_empty() { "Error" } else { error },
-                                );
-                            }
-                        }
+                if self.requests.has_request(ApiEndpoint::Logout) {
+                    if self.requests.ready(ApiEndpoint::Logout).is_some() {
+                        info!("Logged out");
+                        self.login_view = Some(Login::default());
                     } else {
                         ui.spinner();
                     }
+                } else if self.login_view.is_none() && ui.button("Log out").clicked() {
+                    self.requests.new_empty_request(ApiEndpoint::Logout)
                 }
             });
         });
@@ -93,39 +66,16 @@ impl eframe::App for RssApp {
             if self.login_view.is_none() {
                 ui.heading("Hello World!");
 
-                if (ui.button("Do http request")).clicked() {
-                    // Testing http request code.
-                    let (sender, promise) = Promise::new();
-                    let request = ehttp::Request::get("../api/");
-
-                    let ctx = ctx.clone();
-                    ehttp::fetch(request, move |response| {
-                        ctx.request_repaint(); // Wake up UI thread.
-
-                        let result = response
-                            .map(|response| response.text().unwrap_or_default().to_string());
-
-                        sender.send(result);
-                    });
-                    self.test_promise = Some(promise);
-                }
-
-                if let Some(promise) = &self.test_promise {
-                    if let Some(result) = promise.ready() {
-                        match result {
-                            Ok(string) => {
-                                ui.label(string);
-                            }
-                            Err(error) => {
-                                ui.colored_label(
-                                    egui::Color32::RED,
-                                    if error.is_empty() { "Error" } else { error },
-                                );
-                            }
-                        }
+                if self.requests.has_request(ApiEndpoint::HelloWorld) {
+                    if let Some(Response::Ok(contents)) =
+                        self.requests.ready(ApiEndpoint::HelloWorld)
+                    {
+                        info!("{}", contents);
                     } else {
                         ui.spinner();
                     }
+                } else if (ui.button("Do http request")).clicked() {
+                    self.requests.new_empty_request(ApiEndpoint::HelloWorld);
                 }
             }
         });
@@ -137,7 +87,7 @@ impl eframe::App for RssApp {
                 .resizable(false)
                 .collapsible(false)
                 .show(ctx, |ui| {
-                    logged_in = login.show(ctx, ui);
+                    logged_in = login.show(ui, &mut self.requests);
                 });
         }
 

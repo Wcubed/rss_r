@@ -15,7 +15,6 @@ impl actix_web::error::ResponseError for Error {
     fn status_code(&self) -> StatusCode {
         match self {
             Error::AuthenticationError => StatusCode::UNAUTHORIZED,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
