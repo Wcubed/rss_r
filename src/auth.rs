@@ -28,13 +28,13 @@ impl AuthData {
 
     /// TODO (Wybe 2022-07-11): Implement storing session ids instead of user ids.
     /// TODO (Wybe 2022-07-12): Check whether this user is allowed to access this url.
+    ///     Don't return 401 (unauthorized) but 403 (forbidden) to indicate that
+    ///     "yes you are logged in, but no, you don't have rights to view this"
     pub fn authenticate_user_id(
         &self,
         user_id: Option<String>,
         _request: &ServiceRequest,
     ) -> Option<AuthenticationResult> {
-        info!("Authentication attempt: {:?}", user_id);
-
         user_id
             .and_then(|user_id_string| UserId::from_str(&user_id_string))
             .and_then(|id| self.users.get(&id))

@@ -17,9 +17,11 @@ use actix_web::middleware::Logger;
 use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use actix_web_lab::web::redirect;
 use log::{error, info, warn, LevelFilter};
+use rss::Channel;
 use rustls::{Certificate, PrivateKey};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode};
+use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::Mutex;
@@ -32,6 +34,7 @@ const LOGIN_DEADLINE: Duration = Duration::days(3);
 /// TODO (Wybe 2022-07-10): Allow authenticating non-hardcoded users.
 /// TODO (Wybe 2022-07-10): Store the bearer token on the client site in http only cookies (aparently there are cookies that can only be sent along with requests, and not accessed).
 /// TODO (Wybe 2022-07-10): Add some small banner that says this site uses cookies to authenticate? or is it not needed for authentication cookies.
+/// TODO (Wybe 2022-07-12): Rss apparently sometimes allows getting push notifications, via a "Cloud" element in the feed. Is it worth it to implement this?
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // TODO (Wybe 2022-07-10): Add application arguments or a config file that allows logging to
@@ -48,10 +51,6 @@ async fn main() -> std::io::Result<()> {
     .unwrap();
 
     let rustls_config = load_rustls_config();
-
-    let counter = web::Data::new(AppStateCounter {
-        counter: Mutex::new(0),
-    });
 
     info!("Starting Https server at https://{IP}");
 
@@ -85,7 +84,6 @@ async fn main() -> std::io::Result<()> {
 
         App::new()
             .wrap(Logger::default())
-            .app_data(counter.clone())
             .service(redirect("/", "/app/index.html"))
             .service(redirect("/app/", "/app/index.html"))
             // This serves the static files of the rss_r_web webassembly application.
@@ -107,15 +105,18 @@ async fn main() -> std::io::Result<()> {
 }
 
 #[get("/")]
-async fn hello_world(data: web::Data<AppStateCounter>, _auth: Authenticated) -> impl Responder {
-    let mut counter = data.counter.lock().unwrap();
-    *counter += 1;
-
-    HttpResponse::Ok().body(format!("Hello world! Counter: {counter}"))
+async fn hello_world(_auth: Authenticated) -> impl Responder {
+    match download_feed("https://www.grrlpowercomic.com/feed").await {
+        Ok(channel) => HttpResponse::Ok().body(channel.description),
+        // TODO (Wybe 2022-07-12): Error handling
+        Err(_) => HttpResponse::Ok().body("Something went wrong while getting the feed."),
+    }
 }
 
-struct AppStateCounter {
-    counter: Mutex<i32>,
+async fn download_feed(url: &str) -> Result<Channel, Box<dyn Error>> {
+    let content = reqwest::get(url).await?.bytes().await?;
+    let channel = Channel::read_from(&content[..])?;
+    Ok(channel)
 }
 
 fn load_rustls_config() -> rustls::ServerConfig {

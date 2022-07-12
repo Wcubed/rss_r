@@ -88,8 +88,8 @@ impl Requests {
                             _ => Response::NotOk(status_code),
                         }
                     }
-                    // TODO (Wybe 2022-07-11): Handle errors.
-                    Err(e) => Response::Error,
+                    // TODO (Wybe 2022-07-11): Handle errors. For example: the server isn't online.
+                    Err(_e) => Response::Error,
                 };
                 // We are done with this promise, so it can be cleaned up.
                 promise_handled = true;

@@ -9,6 +9,7 @@ pub struct RssApp {
     config: Config,
     login_view: Option<Login>,
     requests: Requests,
+    display_string: String,
 }
 
 impl RssApp {
@@ -31,6 +32,7 @@ impl RssApp {
             // TODO (Wybe 2022-07-10): Maybe make some kind of page system, where you can switch between pages, and don't need to keep each page in a different variable.
             login_view: Some(Login::default()),
             requests: Requests::new(cc.egui_ctx.clone()),
+            display_string: "".to_string(),
         }
     }
 }
@@ -76,12 +78,16 @@ impl eframe::App for RssApp {
                     if let Some(Response::Ok(contents)) =
                         self.requests.ready(ApiEndpoint::HelloWorld)
                     {
-                        info!("{}", contents);
+                        self.display_string = contents;
                     } else {
                         ui.spinner();
                     }
-                } else if (ui.button("Do http request")).clicked() {
-                    self.requests.new_empty_request(ApiEndpoint::HelloWorld);
+                } else {
+                    if (ui.button("Do http request")).clicked() {
+                        self.requests.new_empty_request(ApiEndpoint::HelloWorld);
+                    }
+
+                    ui.label(&self.display_string);
                 }
             }
         });
