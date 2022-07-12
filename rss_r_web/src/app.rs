@@ -40,6 +40,11 @@ impl eframe::App for RssApp {
         // Update any outstanding http requests.
         self.requests.poll();
 
+        if !self.requests.is_authenticated() && self.login_view.is_none() {
+            // No longer authenticated. Back to login view.
+            self.login_view = Some(Login::default());
+        }
+
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if let Some(dark_mode) = global_dark_light_mode_switch(ui) {
@@ -52,6 +57,7 @@ impl eframe::App for RssApp {
                 if self.requests.has_request(ApiEndpoint::Logout) {
                     if self.requests.ready(ApiEndpoint::Logout).is_some() {
                         info!("Logged out");
+                        self.requests.set_authenticated(false);
                         self.login_view = Some(Login::default());
                     } else {
                         ui.spinner();
@@ -92,6 +98,7 @@ impl eframe::App for RssApp {
         }
 
         if logged_in {
+            self.requests.set_authenticated(true);
             self.login_view = None;
         }
     }

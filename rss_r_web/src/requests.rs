@@ -1,7 +1,6 @@
+use crate::requests::HttpStatus::Other;
 use poll_promise::Promise;
 use std::collections::HashMap;
-
-const STATUS_UNAUTHORIZED: u16 = 401;
 
 pub struct Requests {
     promises: HashMap<ApiEndpoint, Promise<ehttp::Result<ehttp::Response>>>,
@@ -18,6 +17,14 @@ impl Requests {
             authenticated: false,
             context: ctx,
         }
+    }
+
+    pub fn is_authenticated(&self) -> bool {
+        self.authenticated
+    }
+
+    pub fn set_authenticated(&mut self, authenticated: bool) {
+        self.authenticated = authenticated;
     }
 
     pub fn poll(&self) {
@@ -68,12 +75,17 @@ impl Requests {
             if let Some(result) = ready {
                 let return_value = match result {
                     Ok(response) => {
-                        if response.status == STATUS_UNAUTHORIZED {
-                            // When we are not authenticated, the api won't send anything back.
-                            self.authenticated = false;
-                            Response::Unauthorized
-                        } else {
-                            Response::Ok(response.text().unwrap_or("").to_string())
+                        let status_code = HttpStatus::from_u16(response.status);
+
+                        match status_code {
+                            HttpStatus::Ok => {
+                                Response::Ok(response.text().unwrap_or("").to_string())
+                            }
+                            HttpStatus::Unauthorized => {
+                                self.authenticated = false;
+                                Response::NotOk(status_code)
+                            }
+                            _ => Response::NotOk(status_code),
                         }
                     }
                     // TODO (Wybe 2022-07-11): Handle errors.
@@ -97,6 +109,7 @@ impl Requests {
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub enum ApiEndpoint {
+    TestAuthCookie,
     Login,
     Logout,
     HelloWorld,
@@ -105,6 +118,7 @@ pub enum ApiEndpoint {
 impl ApiEndpoint {
     pub fn request(&self) -> ehttp::Request {
         let endpoint = match self {
+            Self::TestAuthCookie => "test_auth_cookie",
             Self::Login => "login",
             Self::Logout => "logout",
             Self::HelloWorld => "",
@@ -116,6 +130,23 @@ impl ApiEndpoint {
 
 pub enum Response {
     Ok(String),
-    Unauthorized,
+    NotOk(HttpStatus),
     Error,
+}
+
+#[derive(Eq, PartialEq, Clone, Copy, Debug)]
+pub enum HttpStatus {
+    Ok,
+    Unauthorized,
+    Other(u16),
+}
+
+impl HttpStatus {
+    pub fn from_u16(value: u16) -> Self {
+        match value {
+            200 => Self::Ok,
+            401 => Self::Unauthorized,
+            _ => Other(value),
+        }
+    }
 }

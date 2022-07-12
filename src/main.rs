@@ -1,22 +1,22 @@
 #![deny(unsafe_code)]
 #![warn(rust_2018_idioms)]
 
+mod auth;
 mod auth_middleware;
 mod error;
 mod users;
 
-use crate::auth_middleware::{
-    AuthData, AuthenticateMiddlewareFactory, Authenticated, MaybeAuthenticated, AUTH_COOKIE_NAME,
-};
+use crate::auth::{AuthData, AUTH_COOKIE_NAME};
+use crate::auth_middleware::{AuthenticateMiddlewareFactory, Authenticated};
+use crate::users::{UserId, UserInfo};
 use actix_files::Files;
-use actix_identity::{CookieIdentityPolicy, Identity, IdentityService};
+use actix_identity::{CookieIdentityPolicy, IdentityService};
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
 use actix_web::middleware::Logger;
-use actix_web::{get, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use actix_web_lab::web::redirect;
 use log::{error, info, warn, LevelFilter};
-use rss_com_lib::{PASSWORD_HEADER, USER_ID_HEADER};
 use rustls::{Certificate, PrivateKey};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode};
@@ -69,7 +69,19 @@ async fn main() -> std::io::Result<()> {
             // After this time the user has to log in again.
             .login_deadline(LOGIN_DEADLINE);
 
-        let auth_data = AuthData;
+        let mut auth_data = AuthData::new();
+        // TODO (Wybe 2022-07-12): Have some way of creating / storing users.
+        auth_data.new_user(UserInfo {
+            id: UserId(1),
+            name: "test".to_string(),
+            password: "testing".to_string(),
+        });
+
+        // TODO (Wybe 2022-07-12): Is it a problem to store the auth data as web data?
+        //                         all services would be able to access it. But the services
+        //                         are programmed by us, so is there a way for an outsider to exploit that?
+        //                         It does increase the probability of mistakes to slip in i think.
+        let web_auth_data = web::Data::new(auth_data);
 
         App::new()
             .wrap(Logger::default())
@@ -80,10 +92,12 @@ async fn main() -> std::io::Result<()> {
             .service(Files::new("/app", "resources/static"))
             .service(
                 web::scope("/api")
-                    .wrap(AuthenticateMiddlewareFactory::new(auth_data))
+                    .app_data(web_auth_data)
+                    .wrap(AuthenticateMiddlewareFactory)
                     .wrap(IdentityService::new(identity_policy))
-                    .service(login)
-                    .service(logout)
+                    .service(auth::test_auth_cookie)
+                    .service(auth::login)
+                    .service(auth::logout)
                     .service(hello_world),
             )
     })
@@ -93,52 +107,11 @@ async fn main() -> std::io::Result<()> {
 }
 
 #[get("/")]
-async fn hello_world(data: web::Data<AppStateCounter>, auth: Authenticated) -> impl Responder {
+async fn hello_world(data: web::Data<AppStateCounter>, _auth: Authenticated) -> impl Responder {
     let mut counter = data.counter.lock().unwrap();
     *counter += 1;
 
     HttpResponse::Ok().body(format!("Hello world! Counter: {counter}"))
-}
-
-/// Validates user identity cookie.
-/// If there is no user identity cookie:
-/// Validates user id and password, and sets an identity cookie if they are valid.
-#[get("/login")]
-async fn login(req: HttpRequest, id: Identity, maybe_auth: MaybeAuthenticated) -> impl Responder {
-    if let Some(auth) = maybe_auth.inner() {
-        info!("Logging in `{}` with identity cookie", auth.user_name());
-        // Let the client know that the cookie is valid.
-        return HttpResponse::Ok().finish();
-    }
-
-    if let (Some(user_name), Some(password)) = (
-        req.headers()
-            .get(USER_ID_HEADER)
-            .and_then(|id| id.to_str().ok()),
-        req.headers().get(PASSWORD_HEADER),
-    ) {
-        // TODO (Wybe 2022-07-10): Allow registering and remembering users and such.
-        if user_name == "test" && password == "testing" {
-            info!("Logging in `{}` with password", user_name);
-            // Login valid, set the auth cookie so the user doesn't need to login all the time.
-            // TODO (Wybe 2022-07-11): Generate and remember the session id somewhere.
-            id.remember("0".to_string());
-            HttpResponse::Ok().finish()
-        } else {
-            HttpResponse::Unauthorized().finish()
-        }
-    } else {
-        HttpResponse::Unauthorized().finish()
-    }
-}
-
-/// Removes the authentication cookie
-#[get("/logout")]
-async fn logout(id: Identity, auth: Authenticated) -> impl Responder {
-    info!("Logging out `{}`", auth.user_name());
-
-    id.forget();
-    HttpResponse::Ok().finish()
 }
 
 struct AppStateCounter {
