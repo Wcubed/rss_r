@@ -1,3 +1,4 @@
+use crate::persistence::SaveInRonFile;
 use crate::users::{UserId, UserRequestInfo, Users};
 use crate::{Authenticated, UserInfo};
 use actix_identity::Identity;
@@ -5,12 +6,14 @@ use actix_web::dev::ServiceRequest;
 use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
 use log::info;
 use rss_com_lib::{PASSWORD_HEADER, USER_ID_HEADER};
+use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
 
 pub const AUTH_COOKIE_NAME: &str = "auth";
 
-#[derive(Default)]
+#[derive(Serialize, Deserialize)]
 pub struct AuthData {
-    users: Users,
+    users: Mutex<Users>,
 }
 
 impl AuthData {
@@ -22,8 +25,9 @@ impl AuthData {
     /// TODO (Wybe 2022-07-12): Have a maximum to the user name length?
     /// TODO (Wybe 2022-07-12): Instead of the username to log-in, use an email address?
     /// TODO (Wybe 2022-07-12): Generate a user id, instead of taking one.
-    pub fn new_user(&mut self, user_info: UserInfo) {
-        self.users.insert(user_info.id, user_info);
+    pub fn new_user(&mut self, id: UserId, user_info: UserInfo) {
+        let mut users = self.users.lock().unwrap();
+        users.insert(id, user_info);
     }
 
     /// TODO (Wybe 2022-07-11): Implement storing session ids instead of user ids.
@@ -32,19 +36,30 @@ impl AuthData {
     ///     "yes you are logged in, but no, you don't have rights to view this"
     pub fn authenticate_user_id(
         &self,
-        user_id: Option<String>,
+        user_id_string: Option<String>,
         _request: &ServiceRequest,
     ) -> Option<AuthenticationResult> {
-        user_id
-            .and_then(|user_id_string| UserId::from_str(&user_id_string))
-            .and_then(|id| self.users.get(&id))
-            .map(|info| AuthenticationResult {
-                user: info.get_request_info(),
-            })
+        let users = self.users.lock().unwrap();
+
+        if let Some(id) =
+            user_id_string.and_then(|user_id_string| UserId::from_str(&user_id_string))
+        {
+            if let Some(info) = users.get(&id) {
+                Some(AuthenticationResult {
+                    user: info.get_request_info(id),
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 
     pub fn validate_password(&self, user_name: &str, password: &str) -> Option<UserId> {
-        if let Some((&id, info)) = self.users.iter().find(|(_, info)| info.name == user_name) {
+        let users = self.users.lock().unwrap();
+
+        if let Some((&id, info)) = users.iter().find(|(_, info)| info.name == user_name) {
             if info.password == password {
                 Some(id)
             } else {
@@ -54,6 +69,29 @@ impl AuthData {
             None
         }
     }
+}
+
+impl Default for AuthData {
+    fn default() -> Self {
+        let mut auth = Self {
+            users: Mutex::new(Default::default()),
+        };
+
+        // TODO (Wybe 2022-07-12): Have some way of creating users.
+        auth.new_user(
+            UserId(1),
+            UserInfo {
+                name: "test".to_string(),
+                password: "testing".to_string(),
+            },
+        );
+
+        auth
+    }
+}
+
+impl SaveInRonFile for AuthData {
+    const FILE_NAME: &'static str = "auth.ron";
 }
 
 /// TODO (Wybe 2022-07-11): Add authentication info.

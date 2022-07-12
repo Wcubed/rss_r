@@ -20,6 +20,8 @@ rustls-pemfile = "1.0.0"
 thiserror = "1.0.31"
 rss = "2.0"
 reqwest = "0.11.11"
+ron = "0.7"
+serde = { version = "1", features = ["derive"] }
 
 [profile.release]
 opt-level = 2 # fast and small wasm

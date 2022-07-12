@@ -1,6 +1,9 @@
 # Target for the generated wasm files for rss_r_web
 resources/static/wasm/
 
+# Testing persistence directory for the web server
+persistence/
+
 ### Intellij
 .idea/
 

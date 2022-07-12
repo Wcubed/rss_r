@@ -4,11 +4,13 @@
 mod auth;
 mod auth_middleware;
 mod error;
+mod persistence;
 mod users;
 
 use crate::auth::{AuthData, AUTH_COOKIE_NAME};
 use crate::auth_middleware::{AuthenticateMiddlewareFactory, Authenticated};
-use crate::users::{UserId, UserInfo};
+use crate::persistence::SaveInRonFile;
+use crate::users::UserInfo;
 use actix_files::Files;
 use actix_identity::{CookieIdentityPolicy, IdentityService};
 use actix_web::cookie::time::Duration;
@@ -24,7 +26,6 @@ use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode};
 use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
-use std::sync::Mutex;
 
 /// TODO (Wybe 2022-07-10): Add configuration options for ip address and port.
 const IP: &str = "127.0.0.1:8443";
@@ -50,6 +51,15 @@ async fn main() -> std::io::Result<()> {
     )
     .unwrap();
 
+    let auth_data = AuthData::load_or_default();
+    auth_data.save();
+
+    // TODO (Wybe 2022-07-12): Is it a problem to store the auth data as web data?
+    //                         all services would be able to access it. But the services
+    //                         are programmed by us, so is there a way for an outsider to exploit that?
+    //                         It does increase the probability of mistakes to slip in i think.
+    let web_auth_data = web::Data::new(auth_data);
+
     let rustls_config = load_rustls_config();
 
     info!("Starting Https server at https://{IP}");
@@ -68,20 +78,6 @@ async fn main() -> std::io::Result<()> {
             // After this time the user has to log in again.
             .login_deadline(LOGIN_DEADLINE);
 
-        let mut auth_data = AuthData::new();
-        // TODO (Wybe 2022-07-12): Have some way of creating / storing users.
-        auth_data.new_user(UserInfo {
-            id: UserId(1),
-            name: "test".to_string(),
-            password: "testing".to_string(),
-        });
-
-        // TODO (Wybe 2022-07-12): Is it a problem to store the auth data as web data?
-        //                         all services would be able to access it. But the services
-        //                         are programmed by us, so is there a way for an outsider to exploit that?
-        //                         It does increase the probability of mistakes to slip in i think.
-        let web_auth_data = web::Data::new(auth_data);
-
         App::new()
             .wrap(Logger::default())
             .service(redirect("/", "/app/index.html"))
@@ -90,7 +86,7 @@ async fn main() -> std::io::Result<()> {
             .service(Files::new("/app", "resources/static"))
             .service(
                 web::scope("/api")
-                    .app_data(web_auth_data)
+                    .app_data(web_auth_data.clone())
                     .wrap(AuthenticateMiddlewareFactory)
                     .wrap(IdentityService::new(identity_policy))
                     .service(auth::test_auth_cookie)

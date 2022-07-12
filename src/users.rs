@@ -1,7 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// TODO (Wybe 2022-07-11): Store / load user info on disk.
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct Users(HashMap<UserId, UserInfo>);
 
 impl std::ops::Deref for Users {
@@ -17,8 +17,8 @@ impl std::ops::DerefMut for Users {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct UserInfo {
-    pub id: UserId,
     pub name: String,
     // TODO (Wybe 2022-07-11): Encrypt password according to current best practices.
     //                         Maybe use Argon2, like in https://github.com/dimfeld/ergo/blob/deca6447c4cebdad4e4fa28317a8fcd9f8ed63f2/auth/password.rs
@@ -26,9 +26,9 @@ pub struct UserInfo {
 }
 
 impl UserInfo {
-    pub fn get_request_info(&self) -> UserRequestInfo {
+    pub fn get_request_info(&self, id: UserId) -> UserRequestInfo {
         UserRequestInfo {
-            id: self.id,
+            id,
             name: self.name.clone(),
         }
     }
@@ -41,7 +41,7 @@ pub struct UserRequestInfo {
 }
 
 // TODO (Wybe 2022-07-11): Make internal id private?
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct UserId(pub u32);
 
 impl UserId {
