@@ -16,7 +16,7 @@ use actix_identity::{CookieIdentityPolicy, IdentityService};
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
 use actix_web::middleware::Logger;
-use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{post, web, App, HttpResponse, HttpServer, Responder};
 use actix_web_lab::web::redirect;
 use log::{error, info, warn, LevelFilter};
 use rss::Channel;
@@ -100,7 +100,7 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
-#[get("/")]
+#[post("/")]
 async fn hello_world(_auth: Authenticated) -> impl Responder {
     match download_feed("https://www.grrlpowercomic.com/feed").await {
         Ok(channel) => HttpResponse::Ok().body(channel.description),

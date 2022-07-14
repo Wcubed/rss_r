@@ -116,7 +116,13 @@ pub enum ApiEndpoint {
 }
 
 impl ApiEndpoint {
+    // TODO (Wybe 2022-07-14): Add some way for requests to be idempotent. So that if the same request
+    //                         is sent again, it is detected as duplicate, and nothing happens.
     pub fn request(&self) -> ehttp::Request {
+        self.request_with_body(Vec::new())
+    }
+
+    pub fn request_with_body(&self, body: Vec<u8>) -> ehttp::Request {
         let endpoint = match self {
             Self::TestAuthCookie => "test_auth_cookie",
             Self::Login => "login",
@@ -124,7 +130,7 @@ impl ApiEndpoint {
             Self::HelloWorld => "",
         };
 
-        ehttp::Request::get(format!("../api/{}", endpoint))
+        ehttp::Request::post(format!("../api/{}", endpoint), body)
     }
 }
 

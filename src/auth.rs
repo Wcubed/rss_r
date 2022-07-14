@@ -3,7 +3,7 @@ use crate::users::{UserId, UserRequestInfo, Users};
 use crate::{Authenticated, UserInfo};
 use actix_identity::Identity;
 use actix_web::dev::ServiceRequest;
-use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
+use actix_web::{post, web, HttpRequest, HttpResponse, Responder};
 use log::info;
 use rss_com_lib::{PASSWORD_HEADER, USER_ID_HEADER};
 use serde::{Deserialize, Serialize};
@@ -112,7 +112,7 @@ impl AuthenticationResult {
 /// Validates user identity cookie.
 /// This could also be done by calling any other authenticated service, but having a dedicated
 /// endpoint for it, that doesn't have any side effects, is neater.
-#[get("/test_auth_cookie")]
+#[post("/test_auth_cookie")]
 pub async fn test_auth_cookie(auth: Authenticated) -> impl Responder {
     info!(
         "User `{}` connected with valid identity cookie",
@@ -123,7 +123,7 @@ pub async fn test_auth_cookie(auth: Authenticated) -> impl Responder {
 }
 
 /// Validates user id and password, and sets an identity cookie if they are valid.
-#[get("/login")]
+#[post("/login")]
 pub async fn login(
     req: HttpRequest,
     id: Identity,
@@ -153,7 +153,7 @@ pub async fn login(
 }
 
 /// Logs out the user by forgetting the authentication cookie.
-#[get("/logout")]
+#[post("/logout")]
 pub async fn logout(id: Identity, auth: Authenticated) -> impl Responder {
     info!("Logging out `{}`", auth.user_name());
 
