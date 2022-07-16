@@ -99,6 +99,10 @@ impl eframe::App for RssApp {
         if logged_in {
             self.requests.set_authenticated(true);
             self.login_view = None;
+            self.rss_collection = RssCollection::new();
+
+            // Request the available feeds.
+            self.requests.new_empty_request(ApiEndpoint::ListFeeds);
         }
     }
 

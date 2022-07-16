@@ -33,13 +33,13 @@ impl std::ops::DerefMut for RssCollections {
     }
 }
 
-/// Hashmap<url, ()>
+/// Hashmap<url, feed>
 /// TODO (Wybe 2022-07-16): Make the key an actual Url type. Watch out that that might not be json serializable.
 #[derive(Serialize, Deserialize, Debug, Default)]
-pub struct RssCollection(HashMap<String, ()>);
+pub struct RssCollection(HashMap<String, RssFeed>);
 
 impl std::ops::Deref for RssCollection {
-    type Target = HashMap<String, ()>;
+    type Target = HashMap<String, RssFeed>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -52,6 +52,11 @@ impl std::ops::DerefMut for RssCollection {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct RssFeed {
+    name: String,
+}
+
 /// Returns a list of all feeds in a users collection.
 #[post("/list_feeds")]
 pub async fn list_feeds(
@@ -61,7 +66,10 @@ pub async fn list_feeds(
     let collections = collections.lock().unwrap();
 
     let feeds = if let Some(collection) = collections.get(auth.user_id()) {
-        collection.keys().cloned().collect()
+        collection
+            .iter()
+            .map(|(key, feed)| (key.clone(), feed.name.clone()))
+            .collect()
     } else {
         Vec::new()
     };
@@ -95,7 +103,12 @@ pub async fn add_feed(
         };
 
         // TODO (Wybe 2022-07-16): Check if the feed is already in the collection.
-        collection.insert(request.url.to_string(), ());
+        collection.insert(
+            request.url.to_string(),
+            RssFeed {
+                name: request.name.clone(),
+            },
+        );
     }
 
     collections.save();

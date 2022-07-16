@@ -49,14 +49,14 @@ impl RssCollection {
                 if let Response::Ok(body) = response {
                     if let Ok(feeds_response) = serde_json::from_str::<ListFeedsResponse>(&body) {
                         // Add new feeds
-                        for url in feeds_response.feeds.iter() {
+                        for (url, name) in feeds_response.feeds.iter() {
                             if !self.feeds.contains_key(url) {
-                                // TODO (Wybe 2022-07-16): Handle name.
                                 self.feeds
-                                    .insert(url.clone(), RssFeed { name: url.clone() });
+                                    .insert(url.clone(), RssFeed { name: name.clone() });
                             }
                         }
                         // TODO (Wybe 2022-07-16): Remove those no longer listed.
+                        // TODO (Wybe 2022-07-16): update any existing ones.
                     }
                 }
             } else {
@@ -104,7 +104,7 @@ impl AddFeedPopup {
                         Ok((url, name)) => {
                             ui.label(format!("Feed found: {}", name));
 
-                            AddFeedPopup::show_add_feed_button(ui, requests, url);
+                            AddFeedPopup::show_add_feed_button(ui, requests, url, name);
                         }
                         Err(error_message) => {
                             ui.colored_label(egui::Color32::RED, error_message);
@@ -193,7 +193,7 @@ impl AddFeedPopup {
         }
     }
 
-    fn show_add_feed_button(ui: &mut Ui, requests: &mut Requests, feed_url: &str) {
+    fn show_add_feed_button(ui: &mut Ui, requests: &mut Requests, feed_url: &str, feed_name: &str) {
         if ui
             .add_enabled(
                 !requests.has_request(ApiEndpoint::AddFeed),
@@ -205,6 +205,7 @@ impl AddFeedPopup {
                 ApiEndpoint::AddFeed,
                 AddFeedRequest {
                     url: feed_url.to_string(),
+                    name: feed_name.to_string(),
                 },
             );
         }

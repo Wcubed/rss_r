@@ -19,13 +19,14 @@ pub struct IsUrlAnRssFeedResponse {
 #[derive(Serialize, Deserialize)]
 pub struct AddFeedRequest {
     pub url: String,
+    pub name: String,
 }
 
 /// Response for `/api/list_feeds`
 #[derive(Serialize, Deserialize)]
 pub struct ListFeedsResponse {
-    /// List of url's
+    /// List of url's and names
     /// TODO (Wybe 2022-07-16): Make actually url types, and not flat strings?
     /// TODO (Wybe 2022-07-16): Use references, so we don't copy strigns on every request?
-    pub feeds: Vec<String>,
+    pub feeds: Vec<(String, String)>,
 }
