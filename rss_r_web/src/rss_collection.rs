@@ -2,14 +2,14 @@ use crate::requests::{ApiEndpoint, Requests, Response};
 use egui::{Align2, Button, Context, TextEdit, Ui, Vec2};
 use log::{info, warn};
 use rss_com_lib::body::{DoesFeedExistRequest, DoesFeedExistResponse};
-use rss_com_lib::RssFeedId;
 use std::collections::HashMap;
 
 /// Stores info about the rss feeds the user is following.
 /// Is updated by information received from the server.
 #[derive(Default)]
 pub struct RssCollection {
-    feeds: HashMap<RssFeedId, RssFeed>,
+    /// url -> Feed
+    feeds: HashMap<String, RssFeed>,
     add_feed_popup: Option<AddFeedPopup>,
 }
 
@@ -70,25 +70,18 @@ impl AddFeedPopup {
             .show(ctx, |ui| {
                 self.show_url_input(ui, requests);
 
-                let mut add_button_clickable = false;
-
                 if let Some(response) = &self.response {
                     match response {
                         Ok((_url, name)) => {
                             ui.label(format!("Feed found: {}", name));
-                            add_button_clickable = true;
+                            if ui.button("Add").clicked() {
+                                //TODO (Wybe 2022-07-16): Add the feed.
+                            }
                         }
                         Err(error_message) => {
                             ui.colored_label(egui::Color32::RED, error_message);
                         }
                     }
-                }
-
-                if ui
-                    .add_enabled(add_button_clickable, Button::new("Add"))
-                    .clicked()
-                {
-                    // TODO (Wybe 2022-07-14): Send the request to actually add the feed.
                 }
             });
 
@@ -115,11 +108,9 @@ impl AddFeedPopup {
                 let request_body = DoesFeedExistRequest {
                     url: self.input_url.clone(),
                 };
-                info!("{}", serde_json::to_string(&request_body).unwrap());
-                requests.new_request_with_json_body(
-                    ApiEndpoint::DoesFeedExist,
-                    serde_json::to_vec(&request_body).unwrap(),
-                );
+                requests.new_request_with_json_body(ApiEndpoint::DoesFeedExist, &request_body);
+
+                self.response = None;
             }
         });
 
@@ -139,7 +130,7 @@ impl AddFeedPopup {
                     }
                 } else {
                     warn!(
-                        "Something went wrong while testing an rss feed. Response was: {:?}",
+                        "Something went wrong while testing the rss feed. Response was: {:?}",
                         response
                     );
                     self.response = Some(Err(

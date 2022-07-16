@@ -1,5 +1,6 @@
 use crate::requests::HttpStatus::Other;
 use poll_promise::Promise;
+use serde::Serialize;
 use std::collections::HashMap;
 
 pub struct Requests {
@@ -53,8 +54,8 @@ impl Requests {
 
     /// Creates a new request for the given endpoint.
     /// Overwrites any request that currently exists for that endpoint.
-    pub fn new_request_with_json_body(&mut self, endpoint: ApiEndpoint, body: Vec<u8>) {
-        let mut request = endpoint.request_with_body(body);
+    pub fn new_request_with_json_body(&mut self, endpoint: ApiEndpoint, body: impl Serialize) {
+        let mut request = endpoint.request_with_body(serde_json::to_vec(&body).unwrap());
         //TODO (Wybe 2022-07-16): Make this no longer magic strings, but constants somewhere.
         request
             .headers
