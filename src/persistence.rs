@@ -1,4 +1,4 @@
-use log::warn;
+use log::{info, warn};
 use ron::ser::{to_string_pretty, PrettyConfig};
 use serde::de::DeserializeOwned;
 use serde::Serialize;

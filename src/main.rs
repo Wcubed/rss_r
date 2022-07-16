@@ -11,6 +11,7 @@ mod users;
 use crate::auth::{AuthData, AUTH_COOKIE_NAME};
 use crate::auth_middleware::{AuthenticateMiddlewareFactory, Authenticated};
 use crate::persistence::SaveInRonFile;
+use crate::rss_collection::RssCollections;
 use crate::users::UserInfo;
 use actix_files::Files;
 use actix_identity::{CookieIdentityPolicy, IdentityService};
@@ -62,6 +63,11 @@ async fn main() -> std::io::Result<()> {
     //                         It does increase the probability of mistakes to slip in i think.
     let web_auth_data = web::Data::new(auth_data);
 
+    // TODO (Wybe 2022-07-16): Check whether all users that have a collection actually exist.
+    let rss_collections = RssCollections::load_or_default();
+    rss_collections.save();
+    let web_rss_collections = web::Data::new(rss_collections);
+
     let rustls_config = load_rustls_config();
 
     info!("Starting Https server at https://{IP}");
@@ -89,12 +95,14 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/api")
                     .app_data(web_auth_data.clone())
+                    .app_data(web_rss_collections.clone())
                     .wrap(AuthenticateMiddlewareFactory)
                     .wrap(IdentityService::new(identity_policy))
                     .service(auth::test_auth_cookie)
                     .service(auth::login)
                     .service(auth::logout)
-                    .service(rss_collection::does_feed_exist),
+                    .service(rss_collection::is_url_an_rss_feed)
+                    .service(rss_collection::add_feed),
             )
     })
     .bind_rustls(IP, rustls_config)?

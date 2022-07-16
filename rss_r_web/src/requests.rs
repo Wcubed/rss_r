@@ -28,6 +28,7 @@ impl Requests {
         self.authenticated = authenticated;
     }
 
+    /// TODO (Wybe 2022-07-16): Add timeout
     pub fn poll(&self) {
         for promise in self.promises.values() {
             promise.ready();
@@ -128,7 +129,8 @@ pub enum ApiEndpoint {
     TestAuthCookie,
     Login,
     Logout,
-    DoesFeedExist,
+    IsUrlAnRssFeed,
+    AddFeed,
 }
 
 impl ApiEndpoint {
@@ -143,7 +145,8 @@ impl ApiEndpoint {
             Self::TestAuthCookie => "test_auth_cookie",
             Self::Login => "login",
             Self::Logout => "logout",
-            Self::DoesFeedExist => "does_feed_exist",
+            Self::IsUrlAnRssFeed => "is_url_an_rss_feed",
+            Self::AddFeed => "add_feed",
         };
 
         ehttp::Request::post(format!("../api/{}", endpoint), body)

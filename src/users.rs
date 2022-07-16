@@ -41,7 +41,7 @@ pub struct UserRequestInfo {
 }
 
 // TODO (Wybe 2022-07-11): Make internal id private?
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Debug)]
 pub struct UserId(pub u32);
 
 impl UserId {
