@@ -131,6 +131,7 @@ pub enum ApiEndpoint {
     Logout,
     IsUrlAnRssFeed,
     AddFeed,
+    ListFeeds,
 }
 
 impl ApiEndpoint {
@@ -147,6 +148,7 @@ impl ApiEndpoint {
             Self::Logout => "logout",
             Self::IsUrlAnRssFeed => "is_url_an_rss_feed",
             Self::AddFeed => "add_feed",
+            Self::ListFeeds => "list_feeds",
         };
 
         ehttp::Request::post(format!("../api/{}", endpoint), body)

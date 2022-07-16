@@ -67,7 +67,12 @@ impl Login {
 
                 false
             }
-            State::LoggedIn => true,
+            State::LoggedIn => {
+                // Request the available feeds.
+                requests.new_empty_request(ApiEndpoint::ListFeeds);
+
+                true
+            }
         }
     }
 

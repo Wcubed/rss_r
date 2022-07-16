@@ -3,12 +3,15 @@ use crate::{Authenticated, SaveInRonFile};
 use actix_web::{post, web, HttpResponse, Responder};
 use log::info;
 use rss::Channel;
-use rss_com_lib::body::{AddFeedRequest, IsUrlAnRssFeedRequest, IsUrlAnRssFeedResponse};
+use rss_com_lib::body::{
+    AddFeedRequest, IsUrlAnRssFeedRequest, IsUrlAnRssFeedResponse, ListFeedsResponse,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Mutex;
 
+///TODO (Wybe 2022-07-16): Change to rwlock.
 #[derive(Default, Serialize, Deserialize, Debug)]
 pub struct RssCollections(Mutex<HashMap<UserId, RssCollection>>);
 
@@ -49,9 +52,27 @@ impl std::ops::DerefMut for RssCollection {
     }
 }
 
+/// Returns a list of all feeds in a users collection.
+#[post("/list_feeds")]
+pub async fn list_feeds(
+    auth: Authenticated,
+    collections: web::Data<RssCollections>,
+) -> impl Responder {
+    let collections = collections.lock().unwrap();
+
+    let feeds = if let Some(collection) = collections.get(auth.user_id()) {
+        collection.keys().cloned().collect()
+    } else {
+        Vec::new()
+    };
+
+    HttpResponse::Ok().json(ListFeedsResponse { feeds })
+}
+
 /// Adds the given rss feed to the feed collection of the user.
 /// TODO (Wybe 2022-07-16): Sanitize url?
 /// TODO (Wybe 2022-07-16): Check if the feed actually exists.
+/// TODO (Wybe 2022-07-16): Cache feed, so we can immediately serve it after it has been added.
 #[post("/add_feed")]
 pub async fn add_feed(
     request: web::Json<AddFeedRequest>,
@@ -85,6 +106,7 @@ pub async fn add_feed(
 /// Sends back the title of the feed if it exists.
 /// TODO (Wybe 2022-07-14): Sanitize url?
 /// TODO (Wybe 2022-07-14): Can we do Rust object notation, instead of parsing from Json?
+/// TODO (Wybe 2022-07-16): Cache feed, so we can immediately serve it after it has been added.
 #[post("/is_url_an_rss_feed")]
 pub async fn is_url_an_rss_feed(
     request: web::Json<IsUrlAnRssFeedRequest>,

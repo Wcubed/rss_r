@@ -13,6 +13,7 @@ pub const AUTH_COOKIE_NAME: &str = "auth";
 
 #[derive(Serialize, Deserialize)]
 pub struct AuthData {
+    // TODO (Wybe 2022-07-16): Change to rwlock.
     users: Mutex<Users>,
 }
 

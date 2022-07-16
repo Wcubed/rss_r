@@ -1,7 +1,9 @@
 use crate::requests::{ApiEndpoint, Requests, Response};
 use egui::{Align2, Button, Context, TextEdit, Ui, Vec2};
-use log::{info, warn};
-use rss_com_lib::body::{AddFeedRequest, IsUrlAnRssFeedRequest, IsUrlAnRssFeedResponse};
+use log::warn;
+use rss_com_lib::body::{
+    AddFeedRequest, IsUrlAnRssFeedRequest, IsUrlAnRssFeedResponse, ListFeedsResponse,
+};
 use std::collections::HashMap;
 
 /// Stores info about the rss feeds the user is following.
@@ -30,10 +32,36 @@ impl RssCollection {
         };
         if close_popup {
             self.add_feed_popup = None;
+
+            // After the popup is closed, we should check for any new feeds.
+            // Because we might have just added a new feed.
+            // TODO (Wybe 2022-07-16): Only do this if we indeed added a new feed.
+            requests.new_empty_request(ApiEndpoint::ListFeeds);
         }
 
         for (_, feed) in self.feeds.iter() {
             ui.label(&feed.name);
+        }
+
+        if requests.has_request(ApiEndpoint::ListFeeds) {
+            if let Some(response) = requests.ready(ApiEndpoint::ListFeeds) {
+                // TODO (Wybe 2022-07-16): Handle errors
+                if let Response::Ok(body) = response {
+                    if let Ok(feeds_response) = serde_json::from_str::<ListFeedsResponse>(&body) {
+                        // Add new feeds
+                        for url in feeds_response.feeds.iter() {
+                            if !self.feeds.contains_key(url) {
+                                // TODO (Wybe 2022-07-16): Handle name.
+                                self.feeds
+                                    .insert(url.clone(), RssFeed { name: url.clone() });
+                            }
+                        }
+                        // TODO (Wybe 2022-07-16): Remove those no longer listed.
+                    }
+                }
+            } else {
+                ui.spinner();
+            }
         }
     }
 }
