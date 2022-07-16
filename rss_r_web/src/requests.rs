@@ -48,6 +48,21 @@ impl Requests {
         let mut request = endpoint.request();
         request_fn(&mut request);
 
+        self.add_request(endpoint, request);
+    }
+
+    /// Creates a new request for the given endpoint.
+    /// Overwrites any request that currently exists for that endpoint.
+    pub fn new_request_with_json_body(&mut self, endpoint: ApiEndpoint, body: Vec<u8>) {
+        let mut request = endpoint.request_with_body(body);
+        //TODO (Wybe 2022-07-16): Make this no longer magic strings, but constants somewhere.
+        request
+            .headers
+            .insert("Content-Type".to_string(), "application/json".to_string());
+        self.add_request(endpoint, request);
+    }
+
+    fn add_request(&mut self, endpoint: ApiEndpoint, request: ehttp::Request) {
         let (sender, promise) = Promise::new();
         let ctx = self.context.clone();
         ehttp::fetch(request, move |response| {
@@ -112,7 +127,7 @@ pub enum ApiEndpoint {
     TestAuthCookie,
     Login,
     Logout,
-    HelloWorld,
+    DoesFeedExist,
 }
 
 impl ApiEndpoint {
@@ -127,13 +142,14 @@ impl ApiEndpoint {
             Self::TestAuthCookie => "test_auth_cookie",
             Self::Login => "login",
             Self::Logout => "logout",
-            Self::HelloWorld => "",
+            Self::DoesFeedExist => "does_feed_exist",
         };
 
         ehttp::Request::post(format!("../api/{}", endpoint), body)
     }
 }
 
+#[derive(Debug)]
 pub enum Response {
     Ok(String),
     NotOk(HttpStatus),

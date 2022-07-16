@@ -4,6 +4,7 @@
 mod app;
 mod login;
 mod requests;
+mod rss_collection;
 
 pub use app::RssApp;
 use log::Level;

@@ -1,5 +1,6 @@
 use crate::login::Login;
 use crate::requests::{ApiEndpoint, Requests, Response};
+use crate::rss_collection::RssCollection;
 use eframe::Frame;
 use egui::{Align2, Context, Ui, Vec2, Visuals};
 use log::info;
@@ -7,8 +8,9 @@ use log::info;
 pub struct RssApp {
     // TODO (Wybe 2022-07-11): Store config server side? And retrieve on log-in?
     config: Config,
-    login_view: Option<Login>,
     requests: Requests,
+    login_view: Option<Login>,
+    rss_collection: RssCollection,
     display_string: String,
 }
 
@@ -30,8 +32,9 @@ impl RssApp {
         RssApp {
             config,
             // TODO (Wybe 2022-07-10): Maybe make some kind of page system, where you can switch between pages, and don't need to keep each page in a different variable.
-            login_view: Some(Login::default()),
             requests: Requests::new(cc.egui_ctx.clone()),
+            login_view: Some(Login::default()),
+            rss_collection: RssCollection::new(),
             display_string: "".to_string(),
         }
     }
@@ -70,25 +73,15 @@ impl eframe::App for RssApp {
             });
         });
 
+        if self.login_view.is_none() {
+            egui::SidePanel::left("side-panel").show(ctx, |ui| {
+                self.rss_collection.show_list(ctx, ui, &mut self.requests)
+            });
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.login_view.is_none() {
                 ui.heading("Hello World!");
-
-                if self.requests.has_request(ApiEndpoint::HelloWorld) {
-                    if let Some(Response::Ok(contents)) =
-                        self.requests.ready(ApiEndpoint::HelloWorld)
-                    {
-                        self.display_string = contents;
-                    } else {
-                        ui.spinner();
-                    }
-                } else {
-                    if (ui.button("Do http request")).clicked() {
-                        self.requests.new_empty_request(ApiEndpoint::HelloWorld);
-                    }
-
-                    ui.label(&self.display_string);
-                }
             }
         });
 

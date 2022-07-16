@@ -5,6 +5,7 @@ mod auth;
 mod auth_middleware;
 mod error;
 mod persistence;
+mod rss_collection;
 mod users;
 
 use crate::auth::{AuthData, AUTH_COOKIE_NAME};
@@ -41,6 +42,7 @@ async fn main() -> std::io::Result<()> {
     // TODO (Wybe 2022-07-10): Add application arguments or a config file that allows logging to
     //                         a file.
     TermLogger::init(
+        // TODO (Wybe 2022-07-16): Allow changing this through command line arguments
         LevelFilter::Info,
         ConfigBuilder::default()
             .set_thread_level(LevelFilter::Trace)
@@ -92,27 +94,12 @@ async fn main() -> std::io::Result<()> {
                     .service(auth::test_auth_cookie)
                     .service(auth::login)
                     .service(auth::logout)
-                    .service(hello_world),
+                    .service(rss_collection::does_feed_exist),
             )
     })
     .bind_rustls(IP, rustls_config)?
     .run()
     .await
-}
-
-#[post("/")]
-async fn hello_world(_auth: Authenticated) -> impl Responder {
-    match download_feed("https://www.grrlpowercomic.com/feed").await {
-        Ok(channel) => HttpResponse::Ok().body(channel.description),
-        // TODO (Wybe 2022-07-12): Error handling
-        Err(_) => HttpResponse::Ok().body("Something went wrong while getting the feed."),
-    }
-}
-
-async fn download_feed(url: &str) -> Result<Channel, Box<dyn Error>> {
-    let content = reqwest::get(url).await?.bytes().await?;
-    let channel = Channel::read_from(&content[..])?;
-    Ok(channel)
 }
 
 fn load_rustls_config() -> rustls::ServerConfig {

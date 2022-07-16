@@ -2396,6 +2396,9 @@ dependencies = [
 [[package]]
 name = "rss_com_lib"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "rss_r"
@@ -2430,6 +2433,7 @@ dependencies = [
  "poll-promise",
  "rss_com_lib",
  "serde",
+ "serde_json",
  "tracing-wasm",
 ]
 
