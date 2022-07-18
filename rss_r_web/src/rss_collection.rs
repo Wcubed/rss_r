@@ -85,19 +85,35 @@ impl RssCollection {
 
     pub fn show_feed_entries(&mut self, ui: &mut Ui, requests: &mut Requests) {
         if let Some(entries) = &self.selected_feed_entries {
-            egui::Grid::new("feed-grid")
-                .striped(true)
-                .num_columns(2)
-                .show(ui, |ui| {
-                    for entry in entries.iter() {
-                        ui.label(&entry.title);
+            let text_style = egui::TextStyle::Body;
+            let row_height = ui.text_style_height(&text_style);
 
-                        if let Some(link) = &entry.link {
-                            ui.add(egui::Hyperlink::from_label_and_url("Open", link));
-                        }
+            egui::ScrollArea::both()
+                .auto_shrink([false, false])
+                .show_rows(ui, row_height, entries.len(), |ui, row_range| {
+                    egui::Grid::new("feed-grid")
+                        .striped(true)
+                        .num_columns(2)
+                        .start_row(row_range.start)
+                        .show(ui, |ui| {
+                            for entry in entries
+                                .iter()
+                                .skip(row_range.start)
+                                //TODO (Wybe 2022-07-18): Vertical scroll bar changes size sometimes during scrolling, why?
+                                .take(row_range.end - row_range.start)
+                            {
+                                if let Some(link) = &entry.link {
+                                    ui.add(egui::Hyperlink::from_label_and_url("Open", link));
+                                } else {
+                                    // No link, so add an empty label to skip this column.
+                                    ui.label("");
+                                }
 
-                        ui.end_row();
-                    }
+                                ui.label(&entry.title);
+
+                                ui.end_row();
+                            }
+                        });
                 });
         }
 
