@@ -7,14 +7,13 @@ use actix_web::{post, web, HttpRequest, HttpResponse, Responder};
 use log::info;
 use rss_com_lib::{PASSWORD_HEADER, USER_ID_HEADER};
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use std::sync::RwLock;
 
 pub const AUTH_COOKIE_NAME: &str = "auth";
 
 #[derive(Serialize, Deserialize)]
 pub struct AuthData {
-    // TODO (Wybe 2022-07-16): Change to rwlock.
-    users: Mutex<Users>,
+    users: RwLock<Users>,
 }
 
 impl AuthData {
@@ -27,7 +26,7 @@ impl AuthData {
     /// TODO (Wybe 2022-07-12): Instead of the username to log-in, use an email address?
     /// TODO (Wybe 2022-07-12): Generate a user id, instead of taking one.
     pub fn new_user(&mut self, id: UserId, user_info: UserInfo) {
-        let mut users = self.users.lock().unwrap();
+        let mut users = self.users.write().unwrap();
         users.insert(id, user_info);
     }
 
@@ -40,7 +39,7 @@ impl AuthData {
         user_id_string: Option<String>,
         _request: &ServiceRequest,
     ) -> Option<AuthenticationResult> {
-        let users = self.users.lock().unwrap();
+        let users = self.users.read().unwrap();
 
         if let Some(id) =
             user_id_string.and_then(|user_id_string| UserId::from_str(&user_id_string))
@@ -58,7 +57,7 @@ impl AuthData {
     }
 
     pub fn validate_password(&self, user_name: &str, password: &str) -> Option<UserId> {
-        let users = self.users.lock().unwrap();
+        let users = self.users.read().unwrap();
 
         if let Some((&id, info)) = users.iter().find(|(_, info)| info.name == user_name) {
             if info.password == password {
@@ -75,7 +74,7 @@ impl AuthData {
 impl Default for AuthData {
     fn default() -> Self {
         let mut auth = Self {
-            users: Mutex::new(Default::default()),
+            users: RwLock::new(Default::default()),
         };
 
         // TODO (Wybe 2022-07-12): Have some way of creating users.

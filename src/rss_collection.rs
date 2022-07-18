@@ -9,18 +9,18 @@ use rss_com_lib::body::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
-use std::sync::Mutex;
+use std::sync::RwLock;
 
 ///TODO (Wybe 2022-07-16): Change to rwlock.
 #[derive(Default, Serialize, Deserialize, Debug)]
-pub struct RssCollections(Mutex<HashMap<UserId, RssCollection>>);
+pub struct RssCollections(RwLock<HashMap<UserId, RssCollection>>);
 
 impl SaveInRonFile for RssCollections {
     const FILE_NAME: &'static str = "rss_collections.ron";
 }
 
 impl std::ops::Deref for RssCollections {
-    type Target = Mutex<HashMap<UserId, RssCollection>>;
+    type Target = RwLock<HashMap<UserId, RssCollection>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -63,7 +63,7 @@ pub async fn list_feeds(
     auth: Authenticated,
     collections: web::Data<RssCollections>,
 ) -> impl Responder {
-    let collections = collections.lock().unwrap();
+    let collections = collections.read().unwrap();
 
     let feeds = if let Some(collection) = collections.get(auth.user_id()) {
         collection
@@ -94,7 +94,7 @@ pub async fn add_feed(
     );
 
     {
-        let mut collections = collections.lock().unwrap();
+        let mut collections = collections.write().unwrap();
         let collection = if let Some(collection) = collections.get_mut(auth.user_id()) {
             collection
         } else {
@@ -163,14 +163,14 @@ mod tests {
     }
 
     #[test]
-    fn test_serialize_ron_rss_collections_with_one_collecxtion() {
+    fn test_serialize_ron_rss_collections_with_one_collection() {
         let collections = RssCollections::default();
 
         // Note that this scope block is necessary, otherwise we still have the lock
         // while the `to_string_pretty` also wants the lock. Which would deadlock the
         // thread.
         {
-            let mut lock = collections.lock().unwrap();
+            let mut lock = collections.write().unwrap();
 
             let collection = RssCollection::default();
             lock.insert(UserId(0), collection);
