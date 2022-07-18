@@ -1,5 +1,6 @@
-use rss::Item;
+use crate::{FeedEntry, FeedSelection};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Request format for `/api/is_url_an_rss_feed`
 #[derive(Serialize, Deserialize)]
@@ -35,33 +36,14 @@ pub struct ListFeedsResponse {
 /// Request for `/api/get_feed`
 #[derive(Serialize, Deserialize)]
 pub struct GetFeedRequest {
-    pub url: String,
+    pub feed: FeedSelection,
 }
 
 /// Response for `/api/get_feed`
 #[derive(Serialize, Deserialize)]
 pub struct GetFeedResponse {
-    pub requested_url: String,
-    /// Either the contents of the feed, or the error message if there is no feed.
-    pub result: Result<Vec<FeedEntry>, String>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct FeedEntry {
-    /// TODO (Wybe 2022-07-18): Pass a guid, whether it was read or not, and the date.
-    pub title: String,
-    /// Link to the original content.
-    pub link: Option<String>,
-}
-
-impl FeedEntry {
-    pub fn from_rss_item(item: &Item) -> Self {
-        Self {
-            title: match &item.title {
-                Some(title) => title.clone(),
-                None => "No title".to_string(),
-            },
-            link: item.link.clone(),
-        }
-    }
+    pub requested_selection: FeedSelection,
+    /// Hashmap of
+    /// <Feed url -> Either the contents of the feed, or the error message if there is no feed>
+    pub results: HashMap<String, Result<Vec<FeedEntry>, String>>,
 }

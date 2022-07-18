@@ -2,15 +2,13 @@ use crate::users::UserId;
 use crate::{Authenticated, RssCache, SaveInRonFile};
 use actix_web::{post, web, HttpResponse, Responder};
 use log::info;
-use rss::Channel;
 use rss_com_lib::body::{
-    AddFeedRequest, FeedEntry, GetFeedRequest, GetFeedResponse, IsUrlAnRssFeedRequest,
-    IsUrlAnRssFeedResponse, ListFeedsResponse,
+    AddFeedRequest, GetFeedRequest, GetFeedResponse, IsUrlAnRssFeedRequest, IsUrlAnRssFeedResponse,
+    ListFeedsResponse,
 };
+use rss_com_lib::{FeedEntry, FeedSelection};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::error::Error;
-use std::future::Future;
 use std::sync::RwLock;
 
 ///TODO (Wybe 2022-07-16): Change to rwlock.
@@ -86,28 +84,37 @@ pub async fn get_feed(
     collections: web::Data<RssCollections>,
     cache: web::Data<RssCache>,
 ) -> impl Responder {
-    let url = &request.url;
+    let feed_request = &request.feed;
 
     let collections = collections.read().unwrap();
     // TODO (Wybe 2022-07-18): Do this in a way that does not block on `collections` while the potential request
     //      for a feed update is being awaited.
     if let Some(collection) = collections.get(auth.user_id()) {
-        if collection.contains_key(url) {
-            let result = match cache.get_feed(url).await {
-                Ok(channel) => Ok(channel
-                    .items
-                    .iter()
-                    .map(|item| FeedEntry::from_rss_item(item))
-                    .collect()),
-                Err(e) => Err(e.to_string()),
-            };
+        match feed_request {
+            FeedSelection::All => {
+                // TODO (Wybe 2022-07-18): Implement
+                HttpResponse::Forbidden().finish()
+            }
+            FeedSelection::Feed(url) => {
+                if collection.contains_key(url) {
+                    let result = match cache.get_feed(url).await {
+                        Ok(channel) => {
+                            Ok(channel.items.iter().map(FeedEntry::from_rss_item).collect())
+                        }
+                        Err(e) => Err(e.to_string()),
+                    };
 
-            HttpResponse::Ok().json(GetFeedResponse {
-                requested_url: url.clone(),
-                result,
-            })
-        } else {
-            HttpResponse::Forbidden().finish()
+                    let mut results_map = HashMap::new();
+                    results_map.insert(url.clone(), result);
+
+                    HttpResponse::Ok().json(GetFeedResponse {
+                        requested_selection: feed_request.clone(),
+                        results: results_map,
+                    })
+                } else {
+                    HttpResponse::Forbidden().finish()
+                }
+            }
         }
     } else {
         HttpResponse::Forbidden().finish()

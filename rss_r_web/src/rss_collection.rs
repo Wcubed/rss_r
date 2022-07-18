@@ -2,9 +2,10 @@ use crate::requests::{ApiEndpoint, Requests, Response};
 use egui::{Align2, Button, Context, TextEdit, Ui, Vec2};
 use log::warn;
 use rss_com_lib::body::{
-    AddFeedRequest, FeedEntry, GetFeedRequest, GetFeedResponse, IsUrlAnRssFeedRequest,
-    IsUrlAnRssFeedResponse, ListFeedsResponse,
+    AddFeedRequest, GetFeedRequest, GetFeedResponse, IsUrlAnRssFeedRequest, IsUrlAnRssFeedResponse,
+    ListFeedsResponse,
 };
+use rss_com_lib::{FeedEntry, FeedSelection};
 use std::collections::HashMap;
 
 /// Stores info about the rss feeds the user is following.
@@ -12,9 +13,11 @@ use std::collections::HashMap;
 #[derive(Default)]
 pub struct RssCollection {
     /// url -> Feed
+    /// TODO (Wybe 2022-07-18): Add a refresh button somewhere.
     feeds: HashMap<String, RssFeed>,
     /// Url of selected feed.
-    selected_feed: String,
+    feed_selection: FeedSelection,
+    /// A subset of all the entries in the `feeds` hashmap.
     selected_feed_entries: Option<Vec<FeedEntry>>,
     add_feed_popup: Option<AddFeedPopup>,
 }
@@ -25,10 +28,6 @@ impl RssCollection {
     }
 
     pub fn show_list(&mut self, ctx: &Context, ui: &mut Ui, requests: &mut Requests) {
-        if ui.button("Add feed").clicked() && self.add_feed_popup.is_none() {
-            self.add_feed_popup = Some(AddFeedPopup::new());
-        }
-
         let close_popup = if let Some(popup) = &mut self.add_feed_popup {
             popup.show(ctx, requests)
         } else {
@@ -43,23 +42,28 @@ impl RssCollection {
             requests.new_empty_request(ApiEndpoint::ListFeeds);
         }
 
-        let previous_selection = self.selected_feed.clone();
+        let previous_selection = self.feed_selection.clone();
+
+        ui.selectable_value(&mut self.feed_selection, FeedSelection::All, "All feeds");
+
+        ui.separator();
+
         for (url, feed) in self.feeds.iter() {
-            ui.selectable_value(&mut self.selected_feed, url.clone(), &feed.name);
-        }
-
-        if previous_selection != self.selected_feed {
-            // TODO (Wybe 2022-07-18): Change the main display already, and update it when the request returns.
-            requests.new_request_with_json_body(
-                ApiEndpoint::GetFeed,
-                GetFeedRequest {
-                    url: self.selected_feed.clone(),
-                },
+            ui.selectable_value(
+                &mut self.feed_selection,
+                FeedSelection::Feed(url.clone()),
+                &feed.name,
             );
-
-            self.selected_feed_entries = None;
         }
-        // TODO (Wybe 2022-07-18): Locally cache feeds?
+
+        if previous_selection != self.feed_selection {
+            self.update_selected_feed_entries(requests);
+        }
+
+        ui.separator();
+        if ui.button("Add feed").clicked() && self.add_feed_popup.is_none() {
+            self.add_feed_popup = Some(AddFeedPopup::new());
+        }
 
         if requests.has_request(ApiEndpoint::ListFeeds) {
             if let Some(response) = requests.ready(ApiEndpoint::ListFeeds) {
@@ -69,8 +73,13 @@ impl RssCollection {
                         // Add new feeds
                         for (url, name) in feeds_response.feeds.iter() {
                             if !self.feeds.contains_key(url) {
-                                self.feeds
-                                    .insert(url.clone(), RssFeed { name: name.clone() });
+                                self.feeds.insert(
+                                    url.clone(),
+                                    RssFeed {
+                                        name: name.clone(),
+                                        entries: None,
+                                    },
+                                );
                             }
                         }
                         // TODO (Wybe 2022-07-16): Remove those no longer listed.
@@ -123,11 +132,15 @@ impl RssCollection {
                 // TODO (Wybe 2022-07-18): Reduce nesting
                 if let Response::Ok(body) = response {
                     if let Ok(feeds_response) = serde_json::from_str::<GetFeedResponse>(&body) {
-                        if feeds_response.requested_url == self.selected_feed {
-                            if let Ok(entries) = feeds_response.result {
-                                self.selected_feed_entries = Some(entries);
+                        for (url, result) in feeds_response.results {
+                            if let Ok(entries) = result {
+                                if let Some(feed) = self.feeds.get_mut(&url) {
+                                    feed.entries = Some(entries);
+                                }
                             }
                         }
+
+                        self.update_selected_feed_entries(requests);
                     }
                 }
             } else {
@@ -135,10 +148,39 @@ impl RssCollection {
             }
         }
     }
+
+    fn update_selected_feed_entries(&mut self, requests: &mut Requests) {
+        // TODO (Wybe 2022-07-18): Queue request if another request is outgoing.
+        // TODO (Wybe 2022-07-18): Change the main display already, and update it when the request returns.
+        match &self.feed_selection {
+            FeedSelection::All => {
+                // TODO (Wybe 2022-07-18): Implement
+            }
+            FeedSelection::Feed(url) => {
+                if let Some(feed) = self.feeds.get(url) {
+                    if let Some(entries) = &feed.entries {
+                        // TODO (Wybe 2022-07-18): Sort by date?
+                        // TODO (Wybe 2022-07-18): Instead of a clone, can we use a reference?
+                        self.selected_feed_entries = Some(entries.clone());
+                    } else {
+                        requests.new_request_with_json_body(
+                            ApiEndpoint::GetFeed,
+                            GetFeedRequest {
+                                feed: self.feed_selection.clone(),
+                            },
+                        );
+
+                        self.selected_feed_entries = None;
+                    }
+                }
+            }
+        }
+    }
 }
 
 struct RssFeed {
     name: String,
+    entries: Option<Vec<FeedEntry>>,
 }
 
 #[derive(Default)]
