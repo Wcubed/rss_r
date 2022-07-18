@@ -5,12 +5,14 @@ mod auth;
 mod auth_middleware;
 mod error;
 mod persistence;
+mod rss_cache;
 mod rss_collection;
 mod users;
 
 use crate::auth::{AuthData, AUTH_COOKIE_NAME};
 use crate::auth_middleware::{AuthenticateMiddlewareFactory, Authenticated};
 use crate::persistence::SaveInRonFile;
+use crate::rss_cache::RssCache;
 use crate::rss_collection::RssCollections;
 use crate::users::UserInfo;
 use actix_files::Files;
@@ -18,14 +20,12 @@ use actix_identity::{CookieIdentityPolicy, IdentityService};
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
 use actix_web::middleware::Logger;
-use actix_web::{post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{web, App, HttpServer};
 use actix_web_lab::web::redirect;
 use log::{error, info, warn, LevelFilter};
-use rss::Channel;
 use rustls::{Certificate, PrivateKey};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode};
-use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
 
@@ -96,6 +96,7 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/api")
                     .app_data(web_auth_data.clone())
                     .app_data(web_rss_collections.clone())
+                    .app_data(web::Data::new(RssCache::default()))
                     .wrap(AuthenticateMiddlewareFactory)
                     .wrap(IdentityService::new(identity_policy))
                     .service(auth::test_auth_cookie)

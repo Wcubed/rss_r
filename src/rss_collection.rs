@@ -1,5 +1,5 @@
 use crate::users::UserId;
-use crate::{Authenticated, SaveInRonFile};
+use crate::{Authenticated, RssCache, SaveInRonFile};
 use actix_web::{post, web, HttpResponse, Responder};
 use log::info;
 use rss::Channel;
@@ -124,6 +124,7 @@ pub async fn add_feed(
 pub async fn is_url_an_rss_feed(
     request: web::Json<IsUrlAnRssFeedRequest>,
     auth: Authenticated,
+    cache: web::Data<RssCache>,
 ) -> impl Responder {
     info!(
         "User `{}` tests url `{}` for existence of an rss feed",
@@ -131,9 +132,24 @@ pub async fn is_url_an_rss_feed(
         request.url,
     );
 
-    let result = match download_feed(&request.url).await {
-        Ok(channel) => Ok(channel.title),
-        Err(err) => Err(err.to_string()),
+    let maybe_cached_title = {
+        let cache = cache.read();
+        // TODO (Wybe 2022-07-18): Remove this debug info.
+        cache.get(&request.url).map(|channel| channel.title.clone())
+    };
+
+    let result = if let Some(title) = maybe_cached_title {
+        Ok(title)
+    } else {
+        match download_feed(&request.url).await {
+            Ok(channel) => {
+                let title = channel.title.clone();
+                cache.add_to_cache(request.url.clone(), channel);
+
+                Ok(title)
+            }
+            Err(err) => Err(err.to_string()),
+        }
     };
 
     HttpResponse::Ok().json(IsUrlAnRssFeedResponse {
