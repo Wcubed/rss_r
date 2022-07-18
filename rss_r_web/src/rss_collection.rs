@@ -2,8 +2,8 @@ use crate::requests::{ApiEndpoint, Requests, Response};
 use egui::{Align2, Button, Context, TextEdit, Ui, Vec2};
 use log::warn;
 use rss_com_lib::body::{
-    AddFeedRequest, GetFeedRequest, IsUrlAnRssFeedRequest, IsUrlAnRssFeedResponse,
-    ListFeedsResponse,
+    AddFeedRequest, FeedEntry, GetFeedRequest, GetFeedResponse, IsUrlAnRssFeedRequest,
+    IsUrlAnRssFeedResponse, ListFeedsResponse,
 };
 use std::collections::HashMap;
 
@@ -15,6 +15,7 @@ pub struct RssCollection {
     feeds: HashMap<String, RssFeed>,
     /// Url of selected feed.
     selected_feed: String,
+    selected_feed_entries: Option<Vec<FeedEntry>>,
     add_feed_popup: Option<AddFeedPopup>,
 }
 
@@ -55,6 +56,8 @@ impl RssCollection {
                     url: self.selected_feed.clone(),
                 },
             );
+
+            self.selected_feed_entries = None;
         }
         // TODO (Wybe 2022-07-18): Locally cache feeds?
 
@@ -72,6 +75,43 @@ impl RssCollection {
                         }
                         // TODO (Wybe 2022-07-16): Remove those no longer listed.
                         // TODO (Wybe 2022-07-16): update any existing ones.
+                    }
+                }
+            } else {
+                ui.spinner();
+            }
+        }
+    }
+
+    pub fn show_feed_entries(&mut self, ui: &mut Ui, requests: &mut Requests) {
+        if let Some(entries) = &self.selected_feed_entries {
+            egui::Grid::new("feed-grid")
+                .striped(true)
+                .num_columns(2)
+                .show(ui, |ui| {
+                    for entry in entries.iter() {
+                        ui.label(&entry.title);
+
+                        if let Some(link) = &entry.link {
+                            ui.add(egui::Hyperlink::from_label_and_url("Open", link));
+                        }
+
+                        ui.end_row();
+                    }
+                });
+        }
+
+        if requests.has_request(ApiEndpoint::GetFeed) {
+            if let Some(response) = requests.ready(ApiEndpoint::GetFeed) {
+                // TODO (Wybe 2022-07-16): Handle errors
+                // TODO (Wybe 2022-07-18): Reduce nesting
+                if let Response::Ok(body) = response {
+                    if let Ok(feeds_response) = serde_json::from_str::<GetFeedResponse>(&body) {
+                        if feeds_response.requested_url == self.selected_feed {
+                            if let Ok(entries) = feeds_response.result {
+                                self.selected_feed_entries = Some(entries);
+                            }
+                        }
                     }
                 }
             } else {

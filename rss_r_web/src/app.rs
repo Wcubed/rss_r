@@ -81,7 +81,8 @@ impl eframe::App for RssApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.login_view.is_none() {
-                ui.heading("Hello World!");
+                self.rss_collection
+                    .show_feed_entries(ui, &mut self.requests);
             }
         });
 
