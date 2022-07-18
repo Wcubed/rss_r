@@ -4,11 +4,13 @@ use actix_web::{post, web, HttpResponse, Responder};
 use log::info;
 use rss::Channel;
 use rss_com_lib::body::{
-    AddFeedRequest, IsUrlAnRssFeedRequest, IsUrlAnRssFeedResponse, ListFeedsResponse,
+    AddFeedRequest, FeedEntry, GetFeedRequest, GetFeedResponse, IsUrlAnRssFeedRequest,
+    IsUrlAnRssFeedResponse, ListFeedsResponse,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
+use std::future::Future;
 use std::sync::RwLock;
 
 ///TODO (Wybe 2022-07-16): Change to rwlock.
@@ -75,6 +77,41 @@ pub async fn list_feeds(
     };
 
     HttpResponse::Ok().json(ListFeedsResponse { feeds })
+}
+
+#[post("/get_feed")]
+pub async fn get_feed(
+    request: web::Json<GetFeedRequest>,
+    auth: Authenticated,
+    collections: web::Data<RssCollections>,
+    cache: web::Data<RssCache>,
+) -> impl Responder {
+    let url = &request.url;
+
+    let collections = collections.read().unwrap();
+    // TODO (Wybe 2022-07-18): Do this in a way that does not block on `collections` while the potential request
+    //      for a feed update is being awaited.
+    if let Some(collection) = collections.get(auth.user_id()) {
+        if collection.contains_key(url) {
+            let result = match cache.get_feed(url).await {
+                Ok(channel) => Ok(channel
+                    .items
+                    .iter()
+                    .map(|item| FeedEntry::from_rss_item(item))
+                    .collect()),
+                Err(e) => Err(e.to_string()),
+            };
+
+            HttpResponse::Ok().json(GetFeedResponse {
+                requested_url: url.clone(),
+                result,
+            })
+        } else {
+            HttpResponse::Forbidden().finish()
+        }
+    } else {
+        HttpResponse::Forbidden().finish()
+    }
 }
 
 /// Adds the given rss feed to the feed collection of the user.

@@ -2,7 +2,8 @@ use crate::requests::{ApiEndpoint, Requests, Response};
 use egui::{Align2, Button, Context, TextEdit, Ui, Vec2};
 use log::warn;
 use rss_com_lib::body::{
-    AddFeedRequest, IsUrlAnRssFeedRequest, IsUrlAnRssFeedResponse, ListFeedsResponse,
+    AddFeedRequest, GetFeedRequest, IsUrlAnRssFeedRequest, IsUrlAnRssFeedResponse,
+    ListFeedsResponse,
 };
 use std::collections::HashMap;
 
@@ -12,6 +13,8 @@ use std::collections::HashMap;
 pub struct RssCollection {
     /// url -> Feed
     feeds: HashMap<String, RssFeed>,
+    /// Url of selected feed.
+    selected_feed: String,
     add_feed_popup: Option<AddFeedPopup>,
 }
 
@@ -39,9 +42,21 @@ impl RssCollection {
             requests.new_empty_request(ApiEndpoint::ListFeeds);
         }
 
-        for (_, feed) in self.feeds.iter() {
-            ui.label(&feed.name);
+        let previous_selection = self.selected_feed.clone();
+        for (url, feed) in self.feeds.iter() {
+            ui.selectable_value(&mut self.selected_feed, url.clone(), &feed.name);
         }
+
+        if previous_selection != self.selected_feed {
+            // TODO (Wybe 2022-07-18): Change the main display already, and update it when the request returns.
+            requests.new_request_with_json_body(
+                ApiEndpoint::GetFeed,
+                GetFeedRequest {
+                    url: self.selected_feed.clone(),
+                },
+            );
+        }
+        // TODO (Wybe 2022-07-18): Locally cache feeds?
 
         if requests.has_request(ApiEndpoint::ListFeeds) {
             if let Some(response) = requests.ready(ApiEndpoint::ListFeeds) {
