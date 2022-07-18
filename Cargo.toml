@@ -22,6 +22,7 @@ rss = "2.0"
 reqwest = "0.11.11"
 ron = "0.7"
 serde = { version = "1", features = ["derive"] }
+chrono = "0.4"
 
 [profile.release]
 opt-level = 2 # fast and small wasm

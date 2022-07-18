@@ -117,9 +117,7 @@ pub async fn add_feed(
 
 /// Checks a given rss feed for existence.
 /// Sends back the title of the feed if it exists.
-/// TODO (Wybe 2022-07-14): Sanitize url?
 /// TODO (Wybe 2022-07-14): Can we do Rust object notation, instead of parsing from Json?
-/// TODO (Wybe 2022-07-16): Cache feed, so we can immediately serve it after it has been added.
 #[post("/is_url_an_rss_feed")]
 pub async fn is_url_an_rss_feed(
     request: web::Json<IsUrlAnRssFeedRequest>,
@@ -132,36 +130,15 @@ pub async fn is_url_an_rss_feed(
         request.url,
     );
 
-    let maybe_cached_title = {
-        let cache = cache.read();
-        // TODO (Wybe 2022-07-18): Remove this debug info.
-        cache.get(&request.url).map(|channel| channel.title.clone())
-    };
-
-    let result = if let Some(title) = maybe_cached_title {
-        Ok(title)
-    } else {
-        match download_feed(&request.url).await {
-            Ok(channel) => {
-                let title = channel.title.clone();
-                cache.add_to_cache(request.url.clone(), channel);
-
-                Ok(title)
-            }
-            Err(err) => Err(err.to_string()),
-        }
+    let result = match cache.get_feed(&request.url).await {
+        Ok(channel) => Ok(channel.title),
+        Err(err) => Err(err.to_string()),
     };
 
     HttpResponse::Ok().json(IsUrlAnRssFeedResponse {
         requested_url: request.url.to_string(),
         result,
     })
-}
-
-async fn download_feed(url: &str) -> Result<Channel, Box<dyn Error>> {
-    let content = reqwest::get(url).await?.bytes().await?;
-    let channel = Channel::read_from(&content[..])?;
-    Ok(channel)
 }
 
 #[cfg(test)]
