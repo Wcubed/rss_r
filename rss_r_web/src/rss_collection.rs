@@ -2,7 +2,7 @@ use crate::requests::{ApiEndpoint, Requests, Response};
 use egui::{Align2, Button, Context, TextEdit, Ui, Vec2};
 use log::warn;
 use rss_com_lib::body::{
-    AddFeedRequest, GetFeedsRequest, GetFeedsResponse, IsUrlAnRssFeedRequest,
+    AddFeedRequest, GetFeedEntriesRequest, GetFeedEntriesResponse, IsUrlAnRssFeedRequest,
     IsUrlAnRssFeedResponse, ListFeedsResponse,
 };
 use rss_com_lib::FeedEntry;
@@ -18,7 +18,7 @@ pub struct RssCollection {
     /// Url of selected feed.
     feed_selection: FeedSelection,
     /// A subset of all the entries in the `feeds` hashmap.
-    selected_feed_entries: Option<Vec<FeedEntry>>,
+    selected_feed_entries: Vec<FeedEntry>,
     add_feed_popup: Option<AddFeedPopup>,
 }
 
@@ -57,7 +57,7 @@ impl RssCollection {
         }
 
         if previous_selection != self.feed_selection {
-            self.update_selected_feed_entries(requests);
+            self.update_feed_entries_based_on_selection(requests);
         }
 
         ui.separator();
@@ -82,8 +82,14 @@ impl RssCollection {
                                 );
                             }
                         }
+
+                        // We received knowledge of what feeds are in the users collection.
+                        // So we want to update the users currently viewed entries based
+                        // on this new info.
+                        self.update_feed_entries_based_on_selection(requests);
+
                         // TODO (Wybe 2022-07-16): Remove those no longer listed.
-                        // TODO (Wybe 2022-07-16): update any existing ones.
+                        // TODO (Wybe 2022-07-16): update any existing feeds.
                     }
                 }
             } else {
@@ -93,45 +99,14 @@ impl RssCollection {
     }
 
     pub fn show_feed_entries(&mut self, ui: &mut Ui, requests: &mut Requests) {
-        if let Some(entries) = &self.selected_feed_entries {
-            let text_style = egui::TextStyle::Body;
-            let row_height = ui.text_style_height(&text_style);
-
-            egui::ScrollArea::both()
-                .auto_shrink([false, false])
-                .show_rows(ui, row_height, entries.len(), |ui, row_range| {
-                    egui::Grid::new("feed-grid")
-                        .striped(true)
-                        .num_columns(2)
-                        .start_row(row_range.start)
-                        .show(ui, |ui| {
-                            for entry in entries
-                                .iter()
-                                .skip(row_range.start)
-                                //TODO (Wybe 2022-07-18): Vertical scroll bar changes size sometimes during scrolling, why?
-                                .take(row_range.end - row_range.start)
-                            {
-                                if let Some(link) = &entry.link {
-                                    ui.add(egui::Hyperlink::from_label_and_url("Open", link));
-                                } else {
-                                    // No link, so add an empty label to skip this column.
-                                    ui.label("");
-                                }
-
-                                ui.label(&entry.title);
-
-                                ui.end_row();
-                            }
-                        });
-                });
-        }
-
-        if requests.has_request(ApiEndpoint::GetFeeds) {
-            if let Some(response) = requests.ready(ApiEndpoint::GetFeeds) {
+        if requests.has_request(ApiEndpoint::GetFeedEntries) {
+            if let Some(response) = requests.ready(ApiEndpoint::GetFeedEntries) {
                 // TODO (Wybe 2022-07-16): Handle errors
                 // TODO (Wybe 2022-07-18): Reduce nesting
                 if let Response::Ok(body) = response {
-                    if let Ok(feeds_response) = serde_json::from_str::<GetFeedsResponse>(&body) {
+                    if let Ok(feeds_response) =
+                        serde_json::from_str::<GetFeedEntriesResponse>(&body)
+                    {
                         for (url, result) in feeds_response.results {
                             if let Ok(entries) = result {
                                 if let Some(feed) = self.feeds.get_mut(&url) {
@@ -140,45 +115,89 @@ impl RssCollection {
                             }
                         }
 
-                        self.update_selected_feed_entries(requests);
+                        self.update_feed_entries_based_on_selection(requests);
                     }
                 }
             } else {
                 ui.spinner();
             }
         }
+
+        let entries = &self.selected_feed_entries;
+
+        let text_style = egui::TextStyle::Body;
+        let row_height = ui.text_style_height(&text_style);
+
+        egui::ScrollArea::both()
+            .auto_shrink([false, false])
+            .show_rows(ui, row_height, entries.len(), |ui, row_range| {
+                egui::Grid::new("feed-grid")
+                    .striped(true)
+                    .num_columns(2)
+                    .start_row(row_range.start)
+                    .show(ui, |ui| {
+                        for entry in entries
+                            .iter()
+                            .skip(row_range.start)
+                            //TODO (Wybe 2022-07-18): Vertical scroll bar changes size sometimes during scrolling, why?
+                            .take(row_range.end - row_range.start)
+                        {
+                            if let Some(link) = &entry.link {
+                                ui.add(egui::Hyperlink::from_label_and_url("Open", link));
+                            } else {
+                                // No link, so add an empty label to skip this column.
+                                ui.label("");
+                            }
+
+                            ui.label(&entry.title);
+
+                            ui.end_row();
+                        }
+                    });
+            });
     }
 
-    fn update_selected_feed_entries(&mut self, requests: &mut Requests) {
+    fn update_feed_entries_based_on_selection(&mut self, requests: &mut Requests) {
+        self.selected_feed_entries = Vec::new();
+
         // TODO (Wybe 2022-07-18): Queue request if another request is outgoing.
-        // TODO (Wybe 2022-07-18): Change the main display already, and update it when the request returns.
+        // TODO (Wybe 2022-07-18): Change the main display already to whatever we have loaded from our local storage?
+        //                          and update the display when the request returns.
+        let mut urls_to_display = HashSet::new();
         match &self.feed_selection {
             FeedSelection::All => {
-                // TODO (Wybe 2022-07-18): Implement
-
-                // TODO (Wybe 2022-07-18): Do appropriate request if necessary.
-            }
-            FeedSelection::Feed(url) => {
-                if let Some(feed) = self.feeds.get(url) {
-                    if let Some(entries) = &feed.entries {
-                        // TODO (Wybe 2022-07-18): Sort by date?
-                        // TODO (Wybe 2022-07-18): Instead of a clone, can we use a reference?
-                        self.selected_feed_entries = Some(entries.clone());
-                    } else {
-                        let mut feeds_request = HashSet::new();
-                        feeds_request.insert(url.clone());
-
-                        requests.new_request_with_json_body(
-                            ApiEndpoint::GetFeeds,
-                            GetFeedsRequest {
-                                feeds: feeds_request,
-                            },
-                        );
-
-                        self.selected_feed_entries = None;
-                    }
+                for url in self.feeds.keys() {
+                    urls_to_display.insert(url);
                 }
             }
+            FeedSelection::Feed(url) => {
+                urls_to_display.insert(url);
+            }
+        }
+
+        let mut urls_to_request = HashSet::new();
+
+        // Check which feeds we already have the items of,
+        // and therefore don't need to request from the server.
+        for &url in urls_to_display.iter() {
+            if let Some(feed) = self.feeds.get(url) {
+                if let Some(entries) = &feed.entries {
+                    // TODO (Wybe 2022-07-19): there is probably a more efficient way than cloning everything.
+                    self.selected_feed_entries.extend(entries.iter().cloned());
+                } else {
+                    // Feed's content not known, request from server.
+                    urls_to_request.insert(url.clone());
+                }
+            }
+        }
+
+        if !urls_to_request.is_empty() {
+            requests.new_request_with_json_body(
+                ApiEndpoint::GetFeedEntries,
+                GetFeedEntriesRequest {
+                    feeds: urls_to_request,
+                },
+            )
         }
     }
 }

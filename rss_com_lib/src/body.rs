@@ -33,16 +33,16 @@ pub struct ListFeedsResponse {
     pub feeds: Vec<(String, String)>,
 }
 
-/// Request for `/api/get_feeds`
+/// Request for `/api/get_feed_entries`
 #[derive(Serialize, Deserialize)]
-pub struct GetFeedsRequest {
+pub struct GetFeedEntriesRequest {
     /// Urls of the feeds to retrieve.
     pub feeds: HashSet<String>,
 }
 
-/// Response for `/api/get_feeds`
+/// Response for `/api/get_feed_entries`
 #[derive(Serialize, Deserialize)]
-pub struct GetFeedsResponse {
+pub struct GetFeedEntriesResponse {
     /// Hashmap of
     /// <Feed url -> Either the contents of the feed, or the error message if there is no feed>
     pub results: HashMap<String, Result<Vec<FeedEntry>, String>>,

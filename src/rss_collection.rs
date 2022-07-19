@@ -3,7 +3,7 @@ use crate::{Authenticated, RssCache, SaveInRonFile};
 use actix_web::{post, web, HttpResponse, Responder};
 use log::{info, warn};
 use rss_com_lib::body::{
-    AddFeedRequest, GetFeedsRequest, GetFeedsResponse, IsUrlAnRssFeedRequest,
+    AddFeedRequest, GetFeedEntriesRequest, GetFeedEntriesResponse, IsUrlAnRssFeedRequest,
     IsUrlAnRssFeedResponse, ListFeedsResponse,
 };
 use rss_com_lib::FeedEntry;
@@ -77,9 +77,9 @@ pub async fn list_feeds(
     HttpResponse::Ok().json(ListFeedsResponse { feeds })
 }
 
-#[post("/get_feeds")]
-pub async fn get_feeds(
-    request: web::Json<GetFeedsRequest>,
+#[post("/get_feed_entries")]
+pub async fn get_feed_entries(
+    request: web::Json<GetFeedEntriesRequest>,
     auth: Authenticated,
     collections: web::Data<RssCollections>,
     cache: web::Data<RssCache>,
@@ -95,7 +95,7 @@ pub async fn get_feeds(
             // An empty map means the user requested only feeds that they don't have in the collection.
             HttpResponse::Unauthorized().finish()
         } else {
-            HttpResponse::Ok().json(GetFeedsResponse {
+            HttpResponse::Ok().json(GetFeedEntriesResponse {
                 results: results_map,
             })
         }
@@ -118,7 +118,7 @@ async fn get_feeds_from_cache_or_update(
 
     for url in requests.iter() {
         if collection.contains_key(url) {
-            // TODO (Wybe 2022-07-19): Somehow await the get_feeds all at the same time?
+            // TODO (Wybe 2022-07-19): Somehow await the get_feed_entries all at the same time? Instead of each one after the other.
             let result = match cache.get_feed(url).await {
                 Ok(channel) => Ok(channel.items.iter().map(FeedEntry::from_rss_item).collect()),
                 Err(e) => Err(e.to_string()),

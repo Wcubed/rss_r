@@ -132,7 +132,8 @@ pub enum ApiEndpoint {
     IsUrlAnRssFeed,
     AddFeed,
     ListFeeds,
-    GetFeeds,
+    /// Get all the entries in the requested feeds.
+    GetFeedEntries,
 }
 
 impl ApiEndpoint {
@@ -150,7 +151,7 @@ impl ApiEndpoint {
             Self::IsUrlAnRssFeed => "is_url_an_rss_feed",
             Self::AddFeed => "add_feed",
             Self::ListFeeds => "list_feeds",
-            Self::GetFeeds => "get_feeds",
+            Self::GetFeedEntries => "get_feed_entries",
         };
 
         ehttp::Request::post(format!("../api/{}", endpoint), body)
