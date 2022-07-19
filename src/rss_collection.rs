@@ -1,14 +1,14 @@
 use crate::users::UserId;
 use crate::{Authenticated, RssCache, SaveInRonFile};
 use actix_web::{post, web, HttpResponse, Responder};
-use log::info;
+use log::{info, warn};
 use rss_com_lib::body::{
-    AddFeedRequest, GetFeedRequest, GetFeedResponse, IsUrlAnRssFeedRequest, IsUrlAnRssFeedResponse,
-    ListFeedsResponse,
+    AddFeedRequest, GetFeedsRequest, GetFeedsResponse, IsUrlAnRssFeedRequest,
+    IsUrlAnRssFeedResponse, ListFeedsResponse,
 };
-use rss_com_lib::{FeedEntry, FeedSelection};
+use rss_com_lib::FeedEntry;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
 
 ///TODO (Wybe 2022-07-16): Change to rwlock.
@@ -77,48 +77,64 @@ pub async fn list_feeds(
     HttpResponse::Ok().json(ListFeedsResponse { feeds })
 }
 
-#[post("/get_feed")]
-pub async fn get_feed(
-    request: web::Json<GetFeedRequest>,
+#[post("/get_feeds")]
+pub async fn get_feeds(
+    request: web::Json<GetFeedsRequest>,
     auth: Authenticated,
     collections: web::Data<RssCollections>,
     cache: web::Data<RssCache>,
 ) -> impl Responder {
-    let feed_request = &request.feed;
-
     let collections = collections.read().unwrap();
     // TODO (Wybe 2022-07-18): Do this in a way that does not block on `collections` while the potential request
     //      for a feed update is being awaited.
     if let Some(collection) = collections.get(auth.user_id()) {
-        match feed_request {
-            FeedSelection::All => {
-                // TODO (Wybe 2022-07-18): Implement
-                HttpResponse::Forbidden().finish()
-            }
-            FeedSelection::Feed(url) => {
-                if collection.contains_key(url) {
-                    let result = match cache.get_feed(url).await {
-                        Ok(channel) => {
-                            Ok(channel.items.iter().map(FeedEntry::from_rss_item).collect())
-                        }
-                        Err(e) => Err(e.to_string()),
-                    };
+        let results_map =
+            get_feeds_from_cache_or_update(auth, collection, cache, &request.feeds).await;
 
-                    let mut results_map = HashMap::new();
-                    results_map.insert(url.clone(), result);
-
-                    HttpResponse::Ok().json(GetFeedResponse {
-                        requested_selection: feed_request.clone(),
-                        results: results_map,
-                    })
-                } else {
-                    HttpResponse::Forbidden().finish()
-                }
-            }
+        if results_map.is_empty() {
+            // An empty map means the user requested only feeds that they don't have in the collection.
+            HttpResponse::Unauthorized().finish()
+        } else {
+            HttpResponse::Ok().json(GetFeedsResponse {
+                results: results_map,
+            })
         }
     } else {
         HttpResponse::Forbidden().finish()
     }
+}
+
+/// Returns a collection of requested feed entries, keyed by their url.
+/// Makes any needed requests to each feed's original url concurrently.\
+/// TODO (Wybe 2022-07-19): Don't block on collection?
+/// TODO (Wybe 2022-07-19): Rename this
+async fn get_feeds_from_cache_or_update(
+    auth: Authenticated,
+    collection: &RssCollection,
+    cache: web::Data<RssCache>,
+    requests: &HashSet<String>,
+) -> HashMap<String, Result<Vec<FeedEntry>, String>> {
+    let mut results = HashMap::new();
+
+    for url in requests.iter() {
+        if collection.contains_key(url) {
+            // TODO (Wybe 2022-07-19): Somehow await the get_feeds all at the same time?
+            let result = match cache.get_feed(url).await {
+                Ok(channel) => Ok(channel.items.iter().map(FeedEntry::from_rss_item).collect()),
+                Err(e) => Err(e.to_string()),
+            };
+
+            results.insert(url.clone(), result);
+        } else {
+            warn!(
+                "User `{}` made a request for a feed that is not in their collection: `{}`",
+                auth.user_name(),
+                url
+            );
+        }
+    }
+
+    results
 }
 
 /// Adds the given rss feed to the feed collection of the user.

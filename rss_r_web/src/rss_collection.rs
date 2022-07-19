@@ -2,11 +2,11 @@ use crate::requests::{ApiEndpoint, Requests, Response};
 use egui::{Align2, Button, Context, TextEdit, Ui, Vec2};
 use log::warn;
 use rss_com_lib::body::{
-    AddFeedRequest, GetFeedRequest, GetFeedResponse, IsUrlAnRssFeedRequest, IsUrlAnRssFeedResponse,
-    ListFeedsResponse,
+    AddFeedRequest, GetFeedsRequest, GetFeedsResponse, IsUrlAnRssFeedRequest,
+    IsUrlAnRssFeedResponse, ListFeedsResponse,
 };
-use rss_com_lib::{FeedEntry, FeedSelection};
-use std::collections::HashMap;
+use rss_com_lib::FeedEntry;
+use std::collections::{HashMap, HashSet};
 
 /// Stores info about the rss feeds the user is following.
 /// Is updated by information received from the server.
@@ -126,12 +126,12 @@ impl RssCollection {
                 });
         }
 
-        if requests.has_request(ApiEndpoint::GetFeed) {
-            if let Some(response) = requests.ready(ApiEndpoint::GetFeed) {
+        if requests.has_request(ApiEndpoint::GetFeeds) {
+            if let Some(response) = requests.ready(ApiEndpoint::GetFeeds) {
                 // TODO (Wybe 2022-07-16): Handle errors
                 // TODO (Wybe 2022-07-18): Reduce nesting
                 if let Response::Ok(body) = response {
-                    if let Ok(feeds_response) = serde_json::from_str::<GetFeedResponse>(&body) {
+                    if let Ok(feeds_response) = serde_json::from_str::<GetFeedsResponse>(&body) {
                         for (url, result) in feeds_response.results {
                             if let Ok(entries) = result {
                                 if let Some(feed) = self.feeds.get_mut(&url) {
@@ -155,6 +155,8 @@ impl RssCollection {
         match &self.feed_selection {
             FeedSelection::All => {
                 // TODO (Wybe 2022-07-18): Implement
+
+                // TODO (Wybe 2022-07-18): Do appropriate request if necessary.
             }
             FeedSelection::Feed(url) => {
                 if let Some(feed) = self.feeds.get(url) {
@@ -163,10 +165,13 @@ impl RssCollection {
                         // TODO (Wybe 2022-07-18): Instead of a clone, can we use a reference?
                         self.selected_feed_entries = Some(entries.clone());
                     } else {
+                        let mut feeds_request = HashSet::new();
+                        feeds_request.insert(url.clone());
+
                         requests.new_request_with_json_body(
-                            ApiEndpoint::GetFeed,
-                            GetFeedRequest {
-                                feed: self.feed_selection.clone(),
+                            ApiEndpoint::GetFeeds,
+                            GetFeedsRequest {
+                                feeds: feeds_request,
                             },
                         );
 
@@ -322,5 +327,19 @@ impl AddFeedPopup {
                 },
             );
         }
+    }
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub enum FeedSelection {
+    /// Selects all feeds the user has.
+    All,
+    /// Selects one specific feed, based on it's url.
+    Feed(String),
+}
+
+impl Default for FeedSelection {
+    fn default() -> Self {
+        Self::All
     }
 }

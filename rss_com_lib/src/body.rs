@@ -1,6 +1,6 @@
-use crate::{FeedEntry, FeedSelection};
+use crate::FeedEntry;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Request format for `/api/is_url_an_rss_feed`
 #[derive(Serialize, Deserialize)]
@@ -33,16 +33,16 @@ pub struct ListFeedsResponse {
     pub feeds: Vec<(String, String)>,
 }
 
-/// Request for `/api/get_feed`
+/// Request for `/api/get_feeds`
 #[derive(Serialize, Deserialize)]
-pub struct GetFeedRequest {
-    pub feed: FeedSelection,
+pub struct GetFeedsRequest {
+    /// Urls of the feeds to retrieve.
+    pub feeds: HashSet<String>,
 }
 
-/// Response for `/api/get_feed`
+/// Response for `/api/get_feeds`
 #[derive(Serialize, Deserialize)]
-pub struct GetFeedResponse {
-    pub requested_selection: FeedSelection,
+pub struct GetFeedsResponse {
     /// Hashmap of
     /// <Feed url -> Either the contents of the feed, or the error message if there is no feed>
     pub results: HashMap<String, Result<Vec<FeedEntry>, String>>,

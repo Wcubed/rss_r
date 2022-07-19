@@ -103,7 +103,7 @@ async fn main() -> std::io::Result<()> {
                     .service(auth::login)
                     .service(auth::logout)
                     .service(rss_collection::is_url_an_rss_feed)
-                    .service(rss_collection::get_feed)
+                    .service(rss_collection::get_feeds)
                     .service(rss_collection::add_feed)
                     .service(rss_collection::list_feeds),
             )
