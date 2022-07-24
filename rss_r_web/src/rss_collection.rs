@@ -205,6 +205,8 @@ impl RssCollection {
             }
         }
 
+        self.selected_feed_entries.sort();
+
         if !urls_to_request.is_empty() {
             requests.new_request_with_json_body(
                 ApiEndpoint::GetFeedEntries,
