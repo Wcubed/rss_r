@@ -3,6 +3,7 @@
 
 pub mod body;
 
+use chrono::{DateTime, Utc};
 use rss::Item;
 use serde::{Deserialize, Serialize};
 
@@ -15,16 +16,24 @@ pub struct FeedEntry {
     pub title: String,
     /// Link to the original content.
     pub link: Option<String>,
+    pub pub_date: Option<DateTime<Utc>>,
 }
 
 impl FeedEntry {
     pub fn from_rss_item(item: &Item) -> Self {
+        let pub_date = item
+            .pub_date
+            .as_ref()
+            .and_then(|ds| chrono::DateTime::parse_from_rfc2822(ds).ok())
+            .map(|d| d.with_timezone(&Utc));
+
         Self {
             title: match &item.title {
                 Some(title) => title.clone(),
                 None => "No title".to_string(),
             },
             link: item.link.clone(),
+            pub_date,
         }
     }
 }

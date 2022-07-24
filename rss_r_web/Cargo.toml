@@ -14,6 +14,7 @@ eframe = { version = "0.18.0", features = ["persistence"] }
 serde = { version = "1", features = ["derive"] }
 log = "0.4.17"
 console_log = "0.2.0" # Logs to web console
+chrono = "0.4"
 
 ehttp = "0.2.0"
 poll-promise = "0.1.0"

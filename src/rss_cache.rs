@@ -32,9 +32,7 @@ impl RssCache {
                 if now - feed.last_checked < max_cache_age {
                     Some(feed.channel.clone())
                 } else {
-                    // TODO (Wybe 2022-07-18): Remove this info
-                    info!("Cache entry too old");
-                    // Cache entry too old.
+                    // Cache entry too old, download again.
                     None
                 }
             } else {

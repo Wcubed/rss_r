@@ -608,6 +608,7 @@ dependencies = [
  "libc",
  "num-integer",
  "num-traits",
+ "serde",
  "time 0.1.44",
  "winapi",
 ]
@@ -2400,6 +2401,7 @@ dependencies = [
 name = "rss_com_lib"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "rss",
  "serde",
 ]
@@ -2429,6 +2431,7 @@ dependencies = [
 name = "rss_r_web"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "console_error_panic_hook",
  "console_log",
  "eframe",

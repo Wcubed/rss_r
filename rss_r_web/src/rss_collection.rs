@@ -1,4 +1,5 @@
 use crate::requests::{ApiEndpoint, Requests, Response};
+use chrono::Local;
 use egui::{Align2, Button, Context, TextEdit, Ui, Vec2};
 use log::warn;
 use rss_com_lib::body::{
@@ -133,7 +134,7 @@ impl RssCollection {
             .show_rows(ui, row_height, entries.len(), |ui, row_range| {
                 egui::Grid::new("feed-grid")
                     .striped(true)
-                    .num_columns(2)
+                    .num_columns(3)
                     .start_row(row_range.start)
                     .show(ui, |ui| {
                         for entry in entries
@@ -142,14 +143,27 @@ impl RssCollection {
                             //TODO (Wybe 2022-07-18): Vertical scroll bar changes size sometimes during scrolling, why?
                             .take(row_range.end - row_range.start)
                         {
+                            ui.label(&entry.title);
+
+                            if let Some(pub_date) = &entry.pub_date {
+                                // TODO Wybe: How to make this display local time `.with_timezone(&Local)` seems to still give +0 offset, instead of the +2 it should give.
+                                // TODO: Show "x hours ago" or "x days ago" instead of the date and time, when the entry is recent.
+                                ui.label(
+                                    &pub_date
+                                        .with_timezone(&Local)
+                                        .format("%Y-%m-%d")
+                                        .to_string(),
+                                );
+                            } else {
+                                ui.label("");
+                            }
+
                             if let Some(link) = &entry.link {
                                 ui.add(egui::Hyperlink::from_label_and_url("Open", link));
                             } else {
                                 // No link, so add an empty label to skip this column.
                                 ui.label("");
                             }
-
-                            ui.label(&entry.title);
 
                             ui.end_row();
                         }

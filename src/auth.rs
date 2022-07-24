@@ -44,13 +44,9 @@ impl AuthData {
         if let Some(id) =
             user_id_string.and_then(|user_id_string| UserId::from_str(&user_id_string))
         {
-            if let Some(info) = users.get(&id) {
-                Some(AuthenticationResult {
-                    user: info.get_request_info(id),
-                })
-            } else {
-                None
-            }
+            users.get(&id).map(|info| AuthenticationResult {
+                user: info.get_request_info(id),
+            })
         } else {
             None
         }
