@@ -7,6 +7,7 @@ use rss_com_lib::body::{
     IsUrlAnRssFeedResponse, ListFeedsResponse,
 };
 use rss_com_lib::FeedEntry;
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
 /// Stores info about the rss feeds the user is following.
@@ -19,7 +20,7 @@ pub struct RssCollection {
     /// Url of selected feed.
     feed_selection: FeedSelection,
     /// A subset of all the entries in the `feeds` hashmap.
-    selected_feed_entries: Vec<FeedEntry>,
+    selected_feed_entries: Vec<DisplayFeedEntry>,
     add_feed_popup: Option<AddFeedPopup>,
 }
 
@@ -137,28 +138,19 @@ impl RssCollection {
                     .num_columns(3)
                     .start_row(row_range.start)
                     .show(ui, |ui| {
-                        for entry in entries
+                        for disp in entries
                             .iter()
                             .skip(row_range.start)
                             //TODO (Wybe 2022-07-18): Vertical scroll bar changes size sometimes during scrolling, why?
                             .take(row_range.end - row_range.start)
                         {
-                            ui.label(&entry.title);
+                            ui.label(&disp.entry.title);
 
-                            if let Some(pub_date) = &entry.pub_date {
-                                // TODO Wybe: How to make this display local time `.with_timezone(&Local)` seems to still give +0 offset, instead of the +2 it should give.
-                                // TODO: Show "x hours ago" or "x days ago" instead of the date and time, when the entry is recent.
-                                ui.label(
-                                    &pub_date
-                                        .with_timezone(&Local)
-                                        .format("%Y-%m-%d")
-                                        .to_string(),
-                                );
-                            } else {
-                                ui.label("");
-                            }
+                            ui.label(&disp.pub_date_string);
 
-                            if let Some(link) = &entry.link {
+                            ui.label(&disp.feed_title);
+
+                            if let Some(link) = &disp.entry.link {
                                 ui.add(egui::Hyperlink::from_label_and_url("Open", link));
                             } else {
                                 // No link, so add an empty label to skip this column.
@@ -197,7 +189,10 @@ impl RssCollection {
             if let Some(feed) = self.feeds.get(url) {
                 if let Some(entries) = &feed.entries {
                     // TODO (Wybe 2022-07-19): there is probably a more efficient way than cloning everything.
-                    self.selected_feed_entries.extend(entries.iter().cloned());
+                    for entry in entries {
+                        self.selected_feed_entries
+                            .push(DisplayFeedEntry::new(&entry, feed.name.clone()));
+                    }
                 } else {
                     // Feed's content not known, request from server.
                     urls_to_request.insert(url.clone());
@@ -376,5 +371,46 @@ pub enum FeedSelection {
 impl Default for FeedSelection {
     fn default() -> Self {
         Self::All
+    }
+}
+
+/// The info used to display an entry, so that it doesn't need to be recalculated each frame.
+struct DisplayFeedEntry {
+    entry: FeedEntry,
+    /// Title of the feed this entry belongs to.
+    feed_title: String,
+    pub_date_string: String,
+}
+
+impl DisplayFeedEntry {
+    fn new(entry: &FeedEntry, feed_title: String) -> Self {
+        DisplayFeedEntry {
+            entry: entry.clone(),
+            feed_title,
+            pub_date_string: match &entry.pub_date {
+                Some(date) => date.with_timezone(&Local).format("%Y-%m-%d").to_string(),
+                None => "No date".to_string(),
+            },
+        }
+    }
+}
+
+impl PartialEq for DisplayFeedEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.entry.eq(&other.entry)
+    }
+}
+
+impl Eq for DisplayFeedEntry {}
+
+impl PartialOrd for DisplayFeedEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for DisplayFeedEntry {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.entry.cmp(&other.entry)
     }
 }
