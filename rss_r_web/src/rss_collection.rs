@@ -1,3 +1,4 @@
+use crate::hyperlink::NewTabHyperlink;
 use crate::requests::{ApiEndpoint, Requests, Response};
 use chrono::Local;
 use egui::{Align2, Button, Context, TextEdit, Ui, Vec2};
@@ -151,7 +152,7 @@ impl RssCollection {
                             ui.label(&disp.feed_title);
 
                             if let Some(link) = &disp.entry.link {
-                                ui.add(egui::Hyperlink::from_label_and_url("Open", link));
+                                ui.add(NewTabHyperlink::from_label_and_url("Open", link));
                             } else {
                                 // No link, so add an empty label to skip this column.
                                 ui.label("");

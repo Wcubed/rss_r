@@ -2,6 +2,7 @@
 #![warn(rust_2018_idioms)]
 
 mod app;
+mod hyperlink;
 mod login;
 mod requests;
 mod rss_collection;
