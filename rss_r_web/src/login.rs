@@ -19,7 +19,7 @@ impl Login {
             State::New => {
                 // Test whether the identity cookie is still valid, by performing a login
                 // request without username and password.
-                requests.new_empty_request(ApiEndpoint::TestAuthCookie);
+                requests.new_request_without_body(ApiEndpoint::TestAuthCookie);
                 self.state = State::TryIdentityCookieLogin;
 
                 false

@@ -37,7 +37,7 @@ impl Requests {
 
     /// Creates a new, empty request for the given endpoint.
     /// Overwrites any request that currently exists for that endpoint.
-    pub fn new_empty_request(&mut self, endpoint: ApiEndpoint) {
+    pub fn new_request_without_body(&mut self, endpoint: ApiEndpoint) {
         self.new_request(endpoint, |_| {})
     }
 

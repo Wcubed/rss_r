@@ -2,7 +2,7 @@ use crate::hyperlink::NewTabHyperlink;
 use crate::requests::{ApiEndpoint, Requests, Response};
 use chrono::Local;
 use egui::{Align2, Button, Context, TextEdit, Ui, Vec2};
-use log::warn;
+use log::{error, info, warn};
 use rss_com_lib::body::{
     AddFeedRequest, GetFeedEntriesRequest, GetFeedEntriesResponse, IsUrlAnRssFeedRequest,
     IsUrlAnRssFeedResponse, ListFeedsResponse,
@@ -31,18 +31,17 @@ impl RssCollection {
     }
 
     pub fn show_list(&mut self, ctx: &Context, ui: &mut Ui, requests: &mut Requests) {
-        let close_popup = if let Some(popup) = &mut self.add_feed_popup {
-            popup.show(ctx, requests)
-        } else {
-            false
-        };
-        if close_popup {
-            self.add_feed_popup = None;
-
-            // After the popup is closed, we should check for any new feeds.
-            // Because we might have just added a new feed.
-            // TODO (Wybe 2022-07-16): Only do this if we indeed added a new feed.
-            requests.new_empty_request(ApiEndpoint::ListFeeds);
+        if let Some(popup) = &mut self.add_feed_popup {
+            match popup.show(ctx, requests) {
+                AddFeedPopupResponse::None => {} // Nothing to do.
+                AddFeedPopupResponse::ClosePopup => {
+                    self.add_feed_popup = None;
+                }
+                AddFeedPopupResponse::FeedAdded => {
+                    self.add_feed_popup = None;
+                    requests.new_request_without_body(ApiEndpoint::ListFeeds);
+                }
+            }
         }
 
         let previous_selection = self.feed_selection.clone();
@@ -192,7 +191,7 @@ impl RssCollection {
                     // TODO (Wybe 2022-07-19): there is probably a more efficient way than cloning everything.
                     for entry in entries {
                         self.selected_feed_entries
-                            .push(DisplayFeedEntry::new(&entry, feed.name.clone()));
+                            .push(DisplayFeedEntry::new(entry, feed.name.clone()));
                     }
                 } else {
                     // Feed's content not known, request from server.
@@ -235,8 +234,7 @@ impl AddFeedPopup {
         Default::default()
     }
 
-    /// Returns whether it should be closed or not. False means to close the window.
-    fn show(&mut self, ctx: &Context, requests: &mut Requests) -> bool {
+    fn show(&mut self, ctx: &Context, requests: &mut Requests) -> AddFeedPopupResponse {
         let mut is_open = true;
         let mut feed_was_added = false;
 
@@ -279,11 +277,12 @@ impl AddFeedPopup {
             });
 
         if feed_was_added {
-            is_open = false;
+            AddFeedPopupResponse::FeedAdded
+        } else if !is_open {
+            AddFeedPopupResponse::ClosePopup
+        } else {
+            AddFeedPopupResponse::None
         }
-
-        // TODO (Wybe 2022-07-16): Somehow signal that we added a new feed. So the list of feeds should be updated.
-        !is_open
     }
 
     fn show_url_input(&mut self, ui: &mut Ui, requests: &mut Requests) {
@@ -359,6 +358,15 @@ impl AddFeedPopup {
             );
         }
     }
+}
+
+enum AddFeedPopupResponse {
+    /// Nothing to do.
+    None,
+    /// User wants to close the popup. No new feeds.
+    ClosePopup,
+    /// User has added an rss feed. Update the list.
+    FeedAdded,
 }
 
 #[derive(Clone, Eq, PartialEq)]

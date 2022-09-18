@@ -55,6 +55,9 @@ impl std::ops::DerefMut for RssCollection {
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct RssFeed {
     name: String,
+    // TODO Wybe: Implement remembering the FeedEntries for this user?
+    // TODO Wybe: make this a hasmap? What would the key be?
+    entries: Vec<FeedEntry>,
 }
 
 /// Returns a list of all feeds in a users collection.
@@ -167,6 +170,7 @@ pub async fn add_feed(
             request.url.to_string(),
             RssFeed {
                 name: request.name.clone(),
+                entries: Vec::new(),
             },
         );
     }

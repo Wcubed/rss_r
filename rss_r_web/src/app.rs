@@ -11,7 +11,6 @@ pub struct RssApp {
     requests: Requests,
     login_view: Option<Login>,
     rss_collection: RssCollection,
-    display_string: String,
 }
 
 impl RssApp {
@@ -35,7 +34,6 @@ impl RssApp {
             requests: Requests::new(cc.egui_ctx.clone()),
             login_view: Some(Login::default()),
             rss_collection: RssCollection::new(),
-            display_string: "".to_string(),
         }
     }
 }
@@ -68,7 +66,7 @@ impl eframe::App for RssApp {
                         ui.spinner();
                     }
                 } else if self.login_view.is_none() && ui.button("Log out").clicked() {
-                    self.requests.new_empty_request(ApiEndpoint::Logout)
+                    self.requests.new_request_without_body(ApiEndpoint::Logout)
                 }
             });
         });
@@ -103,7 +101,8 @@ impl eframe::App for RssApp {
             self.rss_collection = RssCollection::new();
 
             // Request the available feeds.
-            self.requests.new_empty_request(ApiEndpoint::ListFeeds);
+            self.requests
+                .new_request_without_body(ApiEndpoint::ListFeeds);
         }
     }
 

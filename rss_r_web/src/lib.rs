@@ -19,7 +19,7 @@ use eframe::wasm_bindgen::{self, prelude::*};
 /// You can add more callbacks like this if you want to call in to your code.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
-pub fn start(canvas_id: &str) -> Result<(), eframe::wasm_bindgen::JsValue> {
+pub fn start(canvas_id: &str) {
     // Make sure panics are logged using `console.error`.
     console_error_panic_hook::set_once();
 
@@ -28,5 +28,11 @@ pub fn start(canvas_id: &str) -> Result<(), eframe::wasm_bindgen::JsValue> {
     // Redirect tracing to console.log and friends:
     tracing_wasm::set_as_global_default();
 
-    eframe::start_web(canvas_id, Box::new(|cc| Box::new(RssApp::new(cc))))
+    let web_options = eframe::WebOptions::default();
+    eframe::start_web(
+        canvas_id,
+        web_options,
+        Box::new(|cc| Box::new(RssApp::new(cc))),
+    )
+    .expect("Failed to start eframe");
 }

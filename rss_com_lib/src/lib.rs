@@ -11,7 +11,7 @@ use std::cmp::Ordering;
 pub const USER_ID_HEADER: &str = "user_id";
 pub const PASSWORD_HEADER: &str = "user_pass";
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Debug)]
 pub struct FeedEntry {
     /// TODO (Wybe 2022-07-18): Pass a guid, whether it was read or not, and the date.
     pub title: String,
