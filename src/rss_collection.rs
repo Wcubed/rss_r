@@ -167,13 +167,22 @@ pub async fn add_feed(
         };
 
         // TODO (Wybe 2022-07-16): Check if the feed is already in the collection.
-        collection.insert(
-            request.url.clone(),
-            RssFeed {
-                name: request.name.clone(),
-                entries: Vec::new(),
-            },
-        );
+        if !collection.contains_key(&request.url) {
+            collection.insert(
+                request.url.clone(),
+                RssFeed {
+                    name: request.name.clone(),
+                    entries: Vec::new(),
+                },
+            );
+        } else {
+            info!(
+                "User `{}` already had feed `{}` in their collection",
+                auth.user_name(),
+                request.url
+            );
+            // TODO (Wybe 2022-09-19): Return an error.
+        }
     }
 
     collections.save();
@@ -182,7 +191,6 @@ pub async fn add_feed(
 
 /// Checks a given rss feed for existence.
 /// Sends back the title of the feed if it exists.
-/// TODO (Wybe 2022-09-19): Return an error if the feed is already in the collection of the user?
 /// TODO (Wybe 2022-07-14): Can we do Rust object notation, instead of parsing from Json?
 #[post("/is_url_an_rss_feed")]
 pub async fn is_url_an_rss_feed(
