@@ -3,11 +3,11 @@ use crate::requests::{ApiEndpoint, Requests, Response};
 use chrono::Local;
 use egui::{Align2, Button, Context, TextEdit, Ui, Vec2};
 use log::{error, info, warn};
-use rss_com_lib::body::{
+use rss_com_lib::message_body::{
     AddFeedRequest, GetFeedEntriesRequest, GetFeedEntriesResponse, IsUrlAnRssFeedRequest,
     IsUrlAnRssFeedResponse, ListFeedsResponse,
 };
-use rss_com_lib::FeedEntry;
+use rss_com_lib::{FeedEntry, Url};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
@@ -17,7 +17,7 @@ use std::collections::{HashMap, HashSet};
 pub struct RssCollection {
     /// url -> Feed
     /// TODO (Wybe 2022-07-18): Add a refresh button somewhere.
-    feeds: HashMap<String, RssFeed>,
+    feeds: HashMap<Url, RssFeed>,
     /// Url of selected feed.
     feed_selection: FeedSelection,
     /// A subset of all the entries in the `feeds` hashmap.
@@ -226,7 +226,7 @@ struct AddFeedPopup {
     /// The url is saved separately from the url input by the user, because they can change it
     /// at any point, and then it might not be a valid rss url anymore.
     /// TODO (Wybe 2022-07-14): Provision for multiple feeds being available?
-    response: Option<Result<(String, String), String>>,
+    response: Option<Result<(Url, String), String>>,
 }
 
 impl AddFeedPopup {
@@ -303,7 +303,7 @@ impl AddFeedPopup {
                     || (url_edit_response.lost_focus() && ui.input().key_pressed(egui::Key::Enter)))
             {
                 let request_body = IsUrlAnRssFeedRequest {
-                    url: self.input_url.clone(),
+                    url: Url::new(self.input_url.clone()),
                 };
                 requests.new_request_with_json_body(ApiEndpoint::IsUrlAnRssFeed, &request_body);
 
@@ -341,7 +341,7 @@ impl AddFeedPopup {
         }
     }
 
-    fn show_add_feed_button(ui: &mut Ui, requests: &mut Requests, feed_url: &str, feed_name: &str) {
+    fn show_add_feed_button(ui: &mut Ui, requests: &mut Requests, feed_url: &Url, feed_name: &str) {
         if ui
             .add_enabled(
                 !requests.has_request(ApiEndpoint::AddFeed),
@@ -352,7 +352,7 @@ impl AddFeedPopup {
             requests.new_request_with_json_body(
                 ApiEndpoint::AddFeed,
                 AddFeedRequest {
-                    url: feed_url.to_string(),
+                    url: feed_url.clone(),
                     name: feed_name.to_string(),
                 },
             );
@@ -374,7 +374,7 @@ pub enum FeedSelection {
     /// Selects all feeds the user has.
     All,
     /// Selects one specific feed, based on it's url.
-    Feed(String),
+    Feed(Url),
 }
 
 impl Default for FeedSelection {

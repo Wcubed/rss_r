@@ -2,11 +2,11 @@ use crate::users::UserId;
 use crate::{Authenticated, RssCache, SaveInRonFile};
 use actix_web::{post, web, HttpResponse, Responder};
 use log::{info, warn};
-use rss_com_lib::body::{
+use rss_com_lib::message_body::{
     AddFeedRequest, GetFeedEntriesRequest, GetFeedEntriesResponse, IsUrlAnRssFeedRequest,
     IsUrlAnRssFeedResponse, ListFeedsResponse,
 };
-use rss_com_lib::FeedEntry;
+use rss_com_lib::{FeedEntry, Url};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
@@ -36,10 +36,10 @@ impl std::ops::DerefMut for RssCollections {
 /// Hashmap<url, feed>
 /// TODO (Wybe 2022-07-16): Make the key an actual Url type. Watch out that that might not be json serializable.
 #[derive(Serialize, Deserialize, Debug, Default)]
-pub struct RssCollection(HashMap<String, RssFeed>);
+pub struct RssCollection(HashMap<Url, RssFeed>);
 
 impl std::ops::Deref for RssCollection {
-    type Target = HashMap<String, RssFeed>;
+    type Target = HashMap<Url, RssFeed>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -107,7 +107,8 @@ pub async fn get_feed_entries(
     }
 }
 
-/// Returns a collection of requested feed entries, keyed by their url.
+/// Returns a collection of requested feed entries, keyed by their url, or an error message
+/// if that feed doesn't exist.
 /// Makes any needed requests to each feed's original url concurrently.\
 /// TODO (Wybe 2022-07-19): Don't block on collection?
 /// TODO (Wybe 2022-07-19): Rename this
@@ -115,8 +116,8 @@ async fn get_feeds_from_cache_or_update(
     auth: Authenticated,
     collection: &RssCollection,
     cache: web::Data<RssCache>,
-    requests: &HashSet<String>,
-) -> HashMap<String, Result<Vec<FeedEntry>, String>> {
+    requests: &HashSet<Url>,
+) -> HashMap<Url, Result<Vec<FeedEntry>, String>> {
     let mut results = HashMap::new();
 
     for url in requests.iter() {
@@ -167,7 +168,7 @@ pub async fn add_feed(
 
         // TODO (Wybe 2022-07-16): Check if the feed is already in the collection.
         collection.insert(
-            request.url.to_string(),
+            request.url.clone(),
             RssFeed {
                 name: request.name.clone(),
                 entries: Vec::new(),
@@ -181,6 +182,7 @@ pub async fn add_feed(
 
 /// Checks a given rss feed for existence.
 /// Sends back the title of the feed if it exists.
+/// TODO (Wybe 2022-09-19): Return an error if the feed is already in the collection of the user?
 /// TODO (Wybe 2022-07-14): Can we do Rust object notation, instead of parsing from Json?
 #[post("/is_url_an_rss_feed")]
 pub async fn is_url_an_rss_feed(
@@ -200,7 +202,7 @@ pub async fn is_url_an_rss_feed(
     };
 
     HttpResponse::Ok().json(IsUrlAnRssFeedResponse {
-        requested_url: request.url.to_string(),
+        requested_url: Url::new(request.url.to_string()),
         result,
     })
 }

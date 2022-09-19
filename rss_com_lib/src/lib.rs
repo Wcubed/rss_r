@@ -1,12 +1,13 @@
 #![deny(unsafe_code)]
 #![warn(rust_2018_idioms)]
 
-pub mod body;
+pub mod message_body;
 
 use chrono::{DateTime, Utc};
 use rss::Item;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use std::fmt::{Display, Formatter};
 
 pub const USER_ID_HEADER: &str = "user_id";
 pub const PASSWORD_HEADER: &str = "user_pass";
@@ -61,5 +62,24 @@ impl Ord for FeedEntry {
         }
 
         ord
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Clone)]
+pub struct Url(String);
+
+impl Url {
+    pub fn new(url: String) -> Self {
+        Self(url)
+    }
+
+    pub fn clone_string(&self) -> String {
+        self.0.clone()
+    }
+}
+
+impl Display for Url {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
