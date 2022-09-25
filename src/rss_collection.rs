@@ -18,7 +18,7 @@ pub struct RssCollections(RwLock<HashMap<UserId, RssCollection>>);
 /// TODO (Wybe 2022-09-25): Implement that this is saved every minute or so if it has changed. But not every time a request comes through.
 ///   Also, it should be saved when the server is stopped, for example by pressing Ctrl+C.
 impl SaveInRonFile for RssCollections {
-    const FILE_NAME: &'static str = "rss_collections.ron";
+    const FILE_NAME: &'static str = "collections.ron";
 }
 
 impl std::ops::Deref for RssCollections {
@@ -65,7 +65,10 @@ pub struct RssFeed {
 impl RssFeed {
     pub fn new(name: String) -> Self {
         RssFeed {
-            info: FeedInfo { name },
+            info: FeedInfo {
+                name,
+                ..Default::default()
+            },
             entries: FeedEntries::default(),
         }
     }
@@ -153,15 +156,19 @@ async fn get_feeds_from_cache_or_update(
         let result = if collection.contains_key(url) {
             // TODO (Wybe 2022-07-19): Somehow await the get_feed_entries all at the same time? Instead of each one after the other.
             match cache.get_feed(url).await {
-                Ok(channel) => {
+                Ok(feed) => {
                     // Update the user's collection and add it to the results.
                     let entries = FeedEntries::new(
-                        channel.items.iter().map(FeedEntry::from_rss_item).collect(),
+                        feed.entries
+                            .iter()
+                            .map(FeedEntry::from_raw_feed_entry)
+                            .collect(),
                     );
 
                     let feed = match collection.get_mut(url) {
                         None => {
-                            collection.insert(url.clone(), RssFeed::new(channel.title.clone()));
+                            let title = feed.title.map(|text| text.content).unwrap_or_default();
+                            collection.insert(url.clone(), RssFeed::new(title));
                             collection.get_mut(url).unwrap()
                         }
                         Some(feed) => feed,
@@ -246,7 +253,7 @@ pub async fn is_url_an_rss_feed(
     );
 
     let result = match cache.get_feed(&request.url).await {
-        Ok(channel) => Ok(channel.title),
+        Ok(feed) => Ok(feed.title.map(|text| text.content).unwrap_or_default()),
         Err(err) => Err(err.to_string()),
     };
 

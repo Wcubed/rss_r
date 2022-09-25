@@ -1,4 +1,4 @@
-In-development, web-based rss reader built in rust.
+In-development, web-based feed reader built in rust. Despite the name, it can read RSS, ATOM and JSON feeds.
 
 The test certificate in `resources/local-ssl` has been generated with `mkcert localhost localhost`
 

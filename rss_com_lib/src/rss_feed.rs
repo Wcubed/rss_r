@@ -1,6 +1,6 @@
 use crate::Url;
 use chrono::{DateTime, TimeZone, Utc};
-use rss::Item;
+use feed_rs::model;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::collections::{hash_map, HashMap};
@@ -10,6 +10,7 @@ use std::fmt::{Debug, Formatter, Write};
 #[serde(default)]
 pub struct FeedInfo {
     pub name: String,
+    pub tags: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -118,23 +119,27 @@ pub struct FeedEntry {
 }
 
 impl FeedEntry {
-    pub fn from_rss_item(item: &Item) -> (EntryKey, Self) {
+    pub fn from_raw_feed_entry(item: &model::Entry) -> (EntryKey, Self) {
         // If the entry has no publication date, we will us a default date far in the past.
         let default_date = Utc.ymd(1900, 1, 1).and_hms(1, 1, 1);
 
         let pub_date = item
-            .pub_date
+            .published
             .as_ref()
-            .and_then(|ds| DateTime::parse_from_rfc2822(ds).ok())
+            .cloned()
             .unwrap_or_else(|| default_date.into())
             .with_timezone(&Utc);
 
         let entry = Self {
             title: match &item.title {
-                Some(title) => title.clone(),
+                Some(title) => title.content.clone(),
                 None => "No title".to_string(),
             },
-            link: item.link.clone().map(Url::new),
+            link: item
+                .links
+                .first()
+                .clone()
+                .map(|link| Url::new(link.href.clone())),
             pub_date,
             read: false,
         };
