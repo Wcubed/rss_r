@@ -4,19 +4,19 @@ use actix_web::{post, web, HttpResponse, Responder};
 use log::{info, warn};
 use rss_com_lib::message_body::{
     AddFeedRequest, GetFeedEntriesRequest, GetFeedEntriesResponse, IsUrlAnRssFeedRequest,
-    IsUrlAnRssFeedResponse, ListFeedsResponse,
+    IsUrlAnRssFeedResponse, ListFeedsResponse, SetEntryReadRequestAndResponse,
 };
 use rss_com_lib::rss_feed::{EntryKey, FeedEntries, FeedEntry, FeedInfo};
 use rss_com_lib::Url;
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::Iter;
 use std::collections::{HashMap, HashSet};
-use std::ops::{Deref, DerefMut};
 use std::sync::RwLock;
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 pub struct RssCollections(RwLock<HashMap<UserId, RssCollection>>);
 
+/// TODO (Wybe 2022-09-25): Implement that this is saved every minute or so if it has changed. But not every time a request comes through.
+///   Also, it should be saved when the server is stopped, for example by pressing Ctrl+C.
 impl SaveInRonFile for RssCollections {
     const FILE_NAME: &'static str = "rss_collections.ron";
 }
@@ -52,7 +52,11 @@ impl std::ops::DerefMut for RssCollection {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+/// Represents a single rss feed.
+///
+/// Implements [Default] so that adding new entries won't break the loading of old files.
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(default)]
 pub struct RssFeed {
     info: FeedInfo,
     entries: FeedEntries,
@@ -252,6 +256,38 @@ pub async fn is_url_an_rss_feed(
     })
 }
 
+#[post("/set_entry_read")]
+pub async fn set_entry_read(
+    request: web::Json<SetEntryReadRequestAndResponse>,
+    auth: Authenticated,
+    collections: web::Data<RssCollections>,
+) -> impl Responder {
+    {
+        let mut collections = collections.write().unwrap();
+        if let Some(collection) = collections.get_mut(auth.user_id()) {
+            if let Some(feed) = collection.get_mut(&request.feed_url) {
+                if let Some(entry) = feed.entries.get_mut(&request.entry_key) {
+                    entry.read = request.read;
+                } else {
+                    // Entry does not exist in this feed.
+                    return HttpResponse::Unauthorized().finish();
+                }
+            } else {
+                // Feed does not exist for this user.
+                return HttpResponse::Unauthorized().finish();
+            }
+        } else {
+            // A collection does not exist for this user.
+            return HttpResponse::Unauthorized().finish();
+        };
+    }
+
+    collections.save();
+    // Send the request straight back to the client, so it doesn't need to remember all the
+    // things it has requested from the server.
+    HttpResponse::Ok().json(request.into_inner())
+}
+
 #[cfg(test)]
 mod tests {
     use crate::rss_collection::{RssCollection, RssFeed};
@@ -296,6 +332,7 @@ mod tests {
             title: "Title".to_string(),
             link: Some(Url::new("a link".to_string())),
             pub_date: Default::default(),
+            read: false,
         };
         let key_1 = EntryKey::from_entry(&entry_1);
 
@@ -305,6 +342,7 @@ mod tests {
             title: "Title".to_string(),
             link: Some(Url::new("another_link".to_string())),
             pub_date: Default::default(),
+            read: true,
         };
         let key_2 = EntryKey::from_entry(&entry_2);
 

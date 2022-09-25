@@ -1,11 +1,12 @@
+use crate::add_feed_popup::{AddFeedPopup, AddFeedPopupResponse};
 use crate::hyperlink::NewTabHyperlink;
 use crate::requests::{ApiEndpoint, Requests, Response};
 use chrono::Local;
-use egui::{Align2, Button, Context, TextEdit, Ui, Vec2};
-use log::warn;
+use egui::{Color32, Context, Label, RichText, Ui};
+use log::info;
 use rss_com_lib::message_body::{
-    AddFeedRequest, GetFeedEntriesRequest, GetFeedEntriesResponse, IsUrlAnRssFeedRequest,
-    IsUrlAnRssFeedResponse, ListFeedsResponse,
+    GetFeedEntriesRequest, GetFeedEntriesResponse, ListFeedsResponse,
+    SetEntryReadRequestAndResponse,
 };
 use rss_com_lib::rss_feed::{EntryKey, FeedEntries, FeedEntry, FeedInfo};
 use rss_com_lib::Url;
@@ -48,7 +49,12 @@ impl RssCollection {
 
         let previous_selection = self.feed_selection.clone();
 
-        ui.selectable_value(&mut self.feed_selection, FeedSelection::All, "All feeds");
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.feed_selection, FeedSelection::All, "All feeds");
+            if ui.button("Add feed").clicked() && self.add_feed_popup.is_none() {
+                self.add_feed_popup = Some(AddFeedPopup::new());
+            }
+        });
 
         ui.separator();
 
@@ -65,9 +71,6 @@ impl RssCollection {
         }
 
         ui.separator();
-        if ui.button("Add feed").clicked() && self.add_feed_popup.is_none() {
-            self.add_feed_popup = Some(AddFeedPopup::new());
-        }
 
         if requests.has_request(ApiEndpoint::ListFeeds) {
             if let Some(response) = requests.ready(ApiEndpoint::ListFeeds) {
@@ -122,42 +125,115 @@ impl RssCollection {
             }
         }
 
-        let entries = &self.selected_feed_entries;
+        if requests.has_request(ApiEndpoint::SetEntryRead) {
+            if let Some(Response::Ok(body)) = requests.ready(ApiEndpoint::SetEntryRead) {
+                // `read` field was set successfully. Update the visuals to match.
+                if let Ok(response) = serde_json::from_str::<SetEntryReadRequestAndResponse>(&body)
+                {
+                    if let Some((_, Some(feed))) = self.feeds.get_mut(&response.feed_url) {
+                        if let Some(entry) = feed.get_mut(&response.entry_key) {
+                            entry.read = response.read
+                        }
+                    }
+                }
+
+                // TODO (Wybe 2022-09-25): Can we do better than updating the complete list of entries?
+                self.update_feed_entries_based_on_selection(requests);
+            }
+        }
 
         let text_style = egui::TextStyle::Body;
         let row_height = ui.text_style_height(&text_style);
+        let unread_entry_text_color = ui.ctx().style().visuals.strong_text_color();
+
+        let mut set_entry_read_request = None;
 
         egui::ScrollArea::both()
             .auto_shrink([false, false])
-            .show_rows(ui, row_height, entries.len(), |ui, row_range| {
-                egui::Grid::new("feed-grid")
-                    .striped(true)
-                    .num_columns(3)
-                    .start_row(row_range.start)
-                    .show(ui, |ui| {
-                        for disp in entries
-                            .iter()
-                            .skip(row_range.start)
-                            //TODO (Wybe 2022-07-18): Vertical scroll bar changes size sometimes during scrolling, why?
-                            .take(row_range.end - row_range.start)
-                        {
-                            ui.label(&disp.entry.title);
+            .show_rows(
+                ui,
+                row_height,
+                self.selected_feed_entries.len(),
+                |ui, row_range| {
+                    egui::Grid::new("feed-grid")
+                        .striped(true)
+                        .num_columns(5)
+                        .start_row(row_range.start)
+                        .show(ui, |ui| {
+                            for disp in self
+                                .selected_feed_entries
+                                .iter()
+                                .skip(row_range.start)
+                                //TODO (Wybe 2022-07-18): Vertical scroll bar changes size sometimes during scrolling, why?
+                                .take(row_range.end - row_range.start)
+                            {
+                                let unread = !disp.entry.read;
 
-                            ui.label(&disp.pub_date_string);
+                                let mut mark_read = !unread;
+                                ui.checkbox(
+                                    &mut mark_read,
+                                    highlighted_text(
+                                        &disp.entry.title,
+                                        unread,
+                                        unread_entry_text_color,
+                                    ),
+                                );
 
-                            ui.label(&disp.feed_title);
+                                if mark_read == unread {
+                                    // User wants to mark this entry as read or unread.
+                                    set_entry_read_request = Some(SetEntryReadRequestAndResponse {
+                                        feed_url: disp.feed_url.clone(),
+                                        entry_key: disp.key.clone(),
+                                        read: mark_read,
+                                    });
+                                }
 
-                            if let Some(link) = &disp.entry.link {
-                                ui.add(NewTabHyperlink::from_label_and_url("Open", link));
-                            } else {
-                                // No link, so add an empty label to skip this column.
-                                ui.label("");
+                                ui.label(highlighted_text(
+                                    &disp.pub_date_string,
+                                    unread,
+                                    unread_entry_text_color,
+                                ));
+
+                                ui.label(highlighted_text(
+                                    &disp.feed_title,
+                                    unread,
+                                    unread_entry_text_color,
+                                ));
+
+                                if let Some(link) = &disp.entry.link {
+                                    ui.add(NewTabHyperlink::from_label_and_url("Open", link));
+
+                                    if ui
+                                        .add(NewTabHyperlink::from_label_and_url(
+                                            "Open mark read",
+                                            link,
+                                        ))
+                                        .clicked()
+                                        && !disp.entry.read
+                                    {
+                                        // User wants to mark this entry as read.
+                                        set_entry_read_request =
+                                            Some(SetEntryReadRequestAndResponse {
+                                                feed_url: disp.feed_url.clone(),
+                                                entry_key: disp.key.clone(),
+                                                read: true,
+                                            });
+                                    }
+                                } else {
+                                    // No link, so add empty labels to skip these columns.
+                                    ui.label("");
+                                    ui.label("");
+                                }
+
+                                ui.end_row();
                             }
+                        });
+                },
+            );
 
-                            ui.end_row();
-                        }
-                    });
-            });
+        if let Some(request) = set_entry_read_request {
+            requests.new_request_with_json_body(ApiEndpoint::SetEntryRead, request);
+        }
     }
 
     fn update_feed_entries_based_on_selection(&mut self, requests: &mut Requests) {
@@ -191,6 +267,7 @@ impl RssCollection {
                             entry,
                             key,
                             feed_info.name.clone(),
+                            url.clone(),
                         ));
                     }
                 } else {
@@ -213,155 +290,12 @@ impl RssCollection {
     }
 }
 
-#[derive(Default)]
-struct AddFeedPopup {
-    input_url: String,
-    /// Result<(url, name), error_message>
-    /// Name retrieved from the rss feed.
-    /// The url is saved separately from the url input by the user, because they can change it
-    /// at any point, and then it might not be a valid rss url anymore.
-    /// TODO (Wybe 2022-07-14): Provision for multiple feeds being available?
-    response: Option<Result<(Url, String), String>>,
-}
-
-impl AddFeedPopup {
-    fn new() -> Self {
-        Default::default()
+fn highlighted_text(text: &str, highlight: bool, highlight_color: Color32) -> RichText {
+    let mut text = RichText::new(text);
+    if highlight {
+        text = text.color(highlight_color);
     }
-
-    fn show(&mut self, ctx: &Context, requests: &mut Requests) -> AddFeedPopupResponse {
-        let mut is_open = true;
-        let mut feed_was_added = false;
-
-        egui::Window::new("Add feed")
-            .open(&mut is_open)
-            .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
-            .resizable(false)
-            .collapsible(false)
-            .show(ctx, |ui| {
-                self.show_url_input(ui, requests);
-
-                if let Some(response) = &self.response {
-                    match response {
-                        Ok((url, name)) => {
-                            ui.label(format!("Feed found: {}", name));
-
-                            AddFeedPopup::show_add_feed_button(ui, requests, url, name);
-                        }
-                        Err(error_message) => {
-                            ui.colored_label(egui::Color32::RED, error_message);
-                        }
-                    }
-                }
-
-                if requests.has_request(ApiEndpoint::AddFeed) {
-                    if let Some(response) = requests.ready(ApiEndpoint::AddFeed) {
-                        match response {
-                            Response::Ok(_) => {
-                                // Success.
-                                feed_was_added = true;
-                            }
-                            // TODO (Wybe 2022-07-16): Add error reporting.
-                            Response::NotOk(_) => {}
-                            Response::Error => {}
-                        }
-                    } else {
-                        ui.spinner();
-                    }
-                }
-            });
-
-        if feed_was_added {
-            AddFeedPopupResponse::FeedAdded
-        } else if !is_open {
-            AddFeedPopupResponse::ClosePopup
-        } else {
-            AddFeedPopupResponse::None
-        }
-    }
-
-    fn show_url_input(&mut self, ui: &mut Ui, requests: &mut Requests) {
-        let test_request_ongoing = requests.has_request(ApiEndpoint::IsUrlAnRssFeed);
-
-        ui.horizontal(|ui| {
-            let url_edit_response = TextEdit::singleline(&mut self.input_url)
-                .hint_text("Url")
-                .show(ui)
-                .response;
-
-            let url_test_button_clicked = ui
-                .add_enabled(!test_request_ongoing, Button::new("Test"))
-                .clicked();
-
-            if !test_request_ongoing
-                && (url_test_button_clicked
-                    || (url_edit_response.lost_focus() && ui.input().key_pressed(egui::Key::Enter)))
-            {
-                let request_body = IsUrlAnRssFeedRequest {
-                    url: Url::new(self.input_url.clone()),
-                };
-                requests.new_request_with_json_body(ApiEndpoint::IsUrlAnRssFeed, &request_body);
-
-                self.response = None;
-            }
-        });
-
-        if test_request_ongoing {
-            if let Some(response) = requests.ready(ApiEndpoint::IsUrlAnRssFeed) {
-                //TODO (Wybe 2022-07-16): Make some form of `ready` call that immediately checks for the response to be OK, and deserializes it to the requested type.
-                if let Response::Ok(body) = response {
-                    if let Ok(rss_response) = serde_json::from_str::<IsUrlAnRssFeedResponse>(&body)
-                    {
-                        match rss_response.result {
-                            Ok(name) => {
-                                self.response = Some(Ok((rss_response.requested_url, name)));
-                            }
-                            Err(err) => {
-                                self.response = Some(Err(format!("No rss feed found: {}", err)));
-                            }
-                        }
-                    }
-                } else {
-                    warn!(
-                        "Something went wrong while testing the rss feed. Response was: {:?}",
-                        response
-                    );
-                    self.response = Some(Err(
-                        "Something went wrong while testing for an rss feed.".to_string(),
-                    ));
-                }
-            } else {
-                ui.spinner();
-            }
-        }
-    }
-
-    fn show_add_feed_button(ui: &mut Ui, requests: &mut Requests, feed_url: &Url, feed_name: &str) {
-        if ui
-            .add_enabled(
-                !requests.has_request(ApiEndpoint::AddFeed),
-                Button::new("Add"),
-            )
-            .clicked()
-        {
-            requests.new_request_with_json_body(
-                ApiEndpoint::AddFeed,
-                AddFeedRequest {
-                    url: feed_url.clone(),
-                    name: feed_name.to_string(),
-                },
-            );
-        }
-    }
-}
-
-enum AddFeedPopupResponse {
-    /// Nothing to do.
-    None,
-    /// User wants to close the popup. No new feeds.
-    ClosePopup,
-    /// User has added an rss feed. Update the list.
-    FeedAdded,
+    text
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -385,20 +319,24 @@ struct DisplayFeedEntry {
     key: EntryKey,
     /// Title of the feed this entry belongs to.
     feed_title: String,
+    feed_url: Url,
     pub_date_string: String,
+    read: bool,
 }
 
 impl DisplayFeedEntry {
-    fn new(entry: &FeedEntry, key: &EntryKey, feed_title: String) -> Self {
+    fn new(entry: &FeedEntry, key: &EntryKey, feed_title: String, feed_url: Url) -> Self {
         DisplayFeedEntry {
             entry: entry.clone(),
             key: key.clone(),
             feed_title,
+            feed_url,
             pub_date_string: entry
                 .pub_date
                 .with_timezone(&Local)
                 .format("%Y-%m-%d")
                 .to_string(),
+            read: entry.read,
         }
     }
 }

@@ -1,6 +1,7 @@
 #![deny(unsafe_code)]
 #![warn(rust_2018_idioms)]
 
+mod add_feed_popup;
 mod app;
 mod hyperlink;
 mod login;

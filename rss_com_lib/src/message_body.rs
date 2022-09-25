@@ -1,4 +1,4 @@
-use crate::rss_feed::{FeedEntries, FeedInfo};
+use crate::rss_feed::{EntryKey, FeedEntries, FeedInfo};
 use crate::Url;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -44,4 +44,14 @@ pub struct GetFeedEntriesResponse {
     /// Hashmap of
     /// <Feed url -> Either the contents of the feed, or the error message if there is no feed>
     pub results: HashMap<Url, Result<(FeedInfo, FeedEntries), String>>,
+}
+
+/// Request and response for `/api/set_entry_read`
+/// The server sends the request straight back, so the client doesn't have to remember what
+/// it requested from the server, and can simply "copy the server's notes".
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SetEntryReadRequestAndResponse {
+    pub feed_url: Url,
+    pub entry_key: EntryKey,
+    pub read: bool,
 }

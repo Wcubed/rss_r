@@ -6,7 +6,8 @@ use std::cmp::Ordering;
 use std::collections::{hash_map, HashMap};
 use std::fmt::{Debug, Formatter, Write};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(default)]
 pub struct FeedInfo {
     pub name: String,
 }
@@ -105,13 +106,15 @@ impl<'de> Deserialize<'de> for EntryKey {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Debug, Default)]
+#[serde(default)]
 pub struct FeedEntry {
     pub title: String,
     /// Link to the original content.
     pub link: Option<Url>,
     /// If an rss feed includes an entry with no date, it will get a default date in the past.
     pub pub_date: DateTime<Utc>,
+    pub read: bool,
 }
 
 impl FeedEntry {
@@ -133,6 +136,7 @@ impl FeedEntry {
             },
             link: item.link.clone().map(Url::new),
             pub_date,
+            read: false,
         };
         let key = EntryKey::from_entry(&entry);
         (key, entry)
@@ -183,6 +187,7 @@ mod tests {
             title: "Title".to_owned(),
             link: None,
             pub_date: Utc.ymd(2022, 9, 10).and_hms(1, 3, 4),
+            read: false,
         };
 
         // When

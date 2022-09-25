@@ -56,6 +56,7 @@ impl Requests {
 
     /// Creates a new request for the given endpoint.
     /// Overwrites any request that currently exists for that endpoint.
+    /// TODO (Wybe 2022-09-25): Allow multiple requests of the same type to be sent at the same time?
     pub fn new_request_with_json_body(&mut self, endpoint: ApiEndpoint, body: impl Serialize) {
         let mut request = endpoint.request_with_body(serde_json::to_vec(&body).unwrap());
         //TODO (Wybe 2022-07-16): Make this no longer magic strings, but constants somewhere.
@@ -138,6 +139,7 @@ pub enum ApiEndpoint {
     ListFeeds,
     /// Get all the entries in the requested feeds.
     GetFeedEntries,
+    SetEntryRead,
 }
 
 impl ApiEndpoint {
@@ -156,6 +158,7 @@ impl ApiEndpoint {
             Self::AddFeed => "add_feed",
             Self::ListFeeds => "list_feeds",
             Self::GetFeedEntries => "get_feed_entries",
+            Self::SetEntryRead => "set_entry_read",
         };
 
         ehttp::Request::post(format!("../api/{}", endpoint), body)
