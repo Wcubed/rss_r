@@ -1,4 +1,5 @@
 use crate::requests::HttpStatus::Other;
+use log::warn;
 use poll_promise::Promise;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -102,7 +103,10 @@ impl Requests {
                                 self.authenticated = false;
                                 Response::NotOk(status_code)
                             }
-                            _ => Response::NotOk(status_code),
+                            _ => {
+                                warn!("Request `{:?}` return NOT OK: {:?}", endpoint, status_code);
+                                Response::NotOk(status_code)
+                            }
                         }
                     }
                     // TODO (Wybe 2022-07-11): Handle errors. For example: the server isn't online.

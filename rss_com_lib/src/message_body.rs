@@ -1,4 +1,5 @@
-use crate::{FeedEntry, Url};
+use crate::rss_feed::{FeedEntries, FeedInfo};
+use crate::Url;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -12,7 +13,7 @@ pub struct IsUrlAnRssFeedRequest {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct IsUrlAnRssFeedResponse {
     pub requested_url: Url,
-    /// Either the title of the feed, or the error message if there is no feed.
+    /// Name of the feed, or the error message if there is no feed.
     pub result: Result<String, String>,
 }
 
@@ -27,10 +28,7 @@ pub struct AddFeedRequest {
 /// Response for `/api/list_feeds`
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ListFeedsResponse {
-    /// List of url's and names
-    /// TODO (Wybe 2022-07-16): Make actually url types, and not flat strings?
-    /// TODO (Wybe 2022-07-16): Use references, so we don't copy strigns on every request?
-    pub feeds: Vec<(Url, String)>,
+    pub feeds: HashMap<Url, FeedInfo>,
 }
 
 /// Request for `/api/get_feed_entries`
@@ -45,5 +43,5 @@ pub struct GetFeedEntriesRequest {
 pub struct GetFeedEntriesResponse {
     /// Hashmap of
     /// <Feed url -> Either the contents of the feed, or the error message if there is no feed>
-    pub results: HashMap<Url, Result<Vec<FeedEntry>, String>>,
+    pub results: HashMap<Url, Result<(FeedInfo, FeedEntries), String>>,
 }

@@ -2,12 +2,13 @@ use crate::hyperlink::NewTabHyperlink;
 use crate::requests::{ApiEndpoint, Requests, Response};
 use chrono::Local;
 use egui::{Align2, Button, Context, TextEdit, Ui, Vec2};
-use log::{error, info, warn};
+use log::warn;
 use rss_com_lib::message_body::{
     AddFeedRequest, GetFeedEntriesRequest, GetFeedEntriesResponse, IsUrlAnRssFeedRequest,
     IsUrlAnRssFeedResponse, ListFeedsResponse,
 };
-use rss_com_lib::{FeedEntry, Url};
+use rss_com_lib::rss_feed::{EntryKey, FeedEntries, FeedEntry, FeedInfo};
+use rss_com_lib::Url;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
@@ -16,8 +17,9 @@ use std::collections::{HashMap, HashSet};
 #[derive(Default)]
 pub struct RssCollection {
     /// url -> Feed
+    /// If the entries are [None] that means we have not requested the feed entries from the server.
     /// TODO (Wybe 2022-07-18): Add a refresh button somewhere.
-    feeds: HashMap<Url, RssFeed>,
+    feeds: HashMap<Url, (FeedInfo, Option<FeedEntries>)>,
     /// Url of selected feed.
     feed_selection: FeedSelection,
     /// A subset of all the entries in the `feeds` hashmap.
@@ -50,11 +52,11 @@ impl RssCollection {
 
         ui.separator();
 
-        for (url, feed) in self.feeds.iter() {
+        for (url, (info, _)) in self.feeds.iter() {
             ui.selectable_value(
                 &mut self.feed_selection,
                 FeedSelection::Feed(url.clone()),
-                &feed.name,
+                &info.name,
             );
         }
 
@@ -73,15 +75,9 @@ impl RssCollection {
                 if let Response::Ok(body) = response {
                     if let Ok(feeds_response) = serde_json::from_str::<ListFeedsResponse>(&body) {
                         // Add new feeds
-                        for (url, name) in feeds_response.feeds.iter() {
+                        for (url, info) in feeds_response.feeds.iter() {
                             if !self.feeds.contains_key(url) {
-                                self.feeds.insert(
-                                    url.clone(),
-                                    RssFeed {
-                                        name: name.clone(),
-                                        entries: None,
-                                    },
-                                );
+                                self.feeds.insert(url.clone(), (info.clone(), None));
                             }
                         }
 
@@ -91,7 +87,7 @@ impl RssCollection {
                         self.update_feed_entries_based_on_selection(requests);
 
                         // TODO (Wybe 2022-07-16): Remove those no longer listed.
-                        // TODO (Wybe 2022-07-16): update any existing feeds.
+                        // TODO (Wybe 2022-07-16): update any existing feeds?
                     }
                 }
             } else {
@@ -110,10 +106,11 @@ impl RssCollection {
                         serde_json::from_str::<GetFeedEntriesResponse>(&body)
                     {
                         for (url, result) in feeds_response.results {
-                            if let Ok(entries) = result {
-                                if let Some(feed) = self.feeds.get_mut(&url) {
-                                    feed.entries = Some(entries);
-                                }
+                            if let Ok((info, entries)) = result {
+                                // The server always sends the complete state of the feed,
+                                // so we don't have to worry about checking if the feed is already
+                                // in the map. We can simply overwrite if if it exists.
+                                self.feeds.insert(url, (info, Some(entries)));
                             }
                         }
 
@@ -186,12 +183,15 @@ impl RssCollection {
         // Check which feeds we already have the items of,
         // and therefore don't need to request from the server.
         for &url in urls_to_display.iter() {
-            if let Some(feed) = self.feeds.get(url) {
-                if let Some(entries) = &feed.entries {
+            if let Some((feed_info, maybe_entries)) = self.feeds.get(url) {
+                if let Some(entries) = maybe_entries {
                     // TODO (Wybe 2022-07-19): there is probably a more efficient way than cloning everything.
-                    for entry in entries {
-                        self.selected_feed_entries
-                            .push(DisplayFeedEntry::new(entry, feed.name.clone()));
+                    for (key, entry) in entries.iter() {
+                        self.selected_feed_entries.push(DisplayFeedEntry::new(
+                            entry,
+                            key,
+                            feed_info.name.clone(),
+                        ));
                     }
                 } else {
                     // Feed's content not known, request from server.
@@ -211,11 +211,6 @@ impl RssCollection {
             )
         }
     }
-}
-
-struct RssFeed {
-    name: String,
-    entries: Option<Vec<FeedEntry>>,
 }
 
 #[derive(Default)]
@@ -386,20 +381,24 @@ impl Default for FeedSelection {
 /// The info used to display an entry, so that it doesn't need to be recalculated each frame.
 struct DisplayFeedEntry {
     entry: FeedEntry,
+    /// Key to use when sending update requests to the server, such as marking the entry as read.
+    key: EntryKey,
     /// Title of the feed this entry belongs to.
     feed_title: String,
     pub_date_string: String,
 }
 
 impl DisplayFeedEntry {
-    fn new(entry: &FeedEntry, feed_title: String) -> Self {
+    fn new(entry: &FeedEntry, key: &EntryKey, feed_title: String) -> Self {
         DisplayFeedEntry {
             entry: entry.clone(),
+            key: key.clone(),
             feed_title,
-            pub_date_string: match &entry.pub_date {
-                Some(date) => date.with_timezone(&Local).format("%Y-%m-%d").to_string(),
-                None => "No date".to_string(),
-            },
+            pub_date_string: entry
+                .pub_date
+                .with_timezone(&Local)
+                .format("%Y-%m-%d")
+                .to_string(),
         }
     }
 }

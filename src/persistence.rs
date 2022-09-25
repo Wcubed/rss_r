@@ -14,8 +14,9 @@ pub trait SaveInRonFile: Sized + Default + Serialize + DeserializeOwned {
     const FILE_NAME: &'static str;
 
     /// TODO (Wybe 2022-07-12): Guard against multiple threads writing to the same file at once.
+    /// TODO (Wybe 2022-09-24): Can we make saving atomic? So that either we _did_ save the new state, or we didn't, no corrupted .ron files on disk.
     /// TODO (Wybe 2022-07-12): Handle errors.
-    /// // TODO (Wybe 2022-07-18): Make saving asynchronous, and happen in a background thread? maybe using `actix_web::rt::spawn_blocking();`
+    /// TODO (Wybe 2022-07-18): Make saving asynchronous, and happen in a background thread? maybe using `actix_web::rt::spawn_blocking();`
     fn save(&self) {
         let mut path = PathBuf::from(PERSISTENCE_DIR);
         fs::create_dir_all(&path);

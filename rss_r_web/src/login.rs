@@ -1,7 +1,7 @@
 use crate::login::State::LoggedIn;
 use crate::requests::{ApiEndpoint, HttpStatus, Requests, Response};
-use egui::{Button, Layout, TextEdit, Ui};
-use log::info;
+use egui::{Button, TextEdit, Ui};
+use log::{info, warn};
 use rss_com_lib::{PASSWORD_HEADER, USER_ID_HEADER};
 
 #[derive(Default)]
@@ -56,6 +56,10 @@ impl Login {
                             self.show_invalid_user_or_password_message = true;
                         } else {
                             // TODO (Wybe 2022-07-12): Show some kind of error message?
+                            warn!(
+                                "Unexpected response status while trying to log in: {:?}",
+                                status
+                            );
                         }
                     } else {
                         self.show_invalid_user_or_password_message = false;

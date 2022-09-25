@@ -33,9 +33,6 @@ use std::io::BufReader;
 const IP: &str = "127.0.0.1:8443";
 const LOGIN_DEADLINE: Duration = Duration::days(3);
 
-/// TODO (Wybe 2022-07-10): Can we save the token on the client in a (httpOnly, Secure, SameSite=Strict) cookie?
-/// TODO (Wybe 2022-07-10): Allow authenticating non-hardcoded users.
-/// TODO (Wybe 2022-07-10): Store the bearer token on the client site in http only cookies (aparently there are cookies that can only be sent along with requests, and not accessed).
 /// TODO (Wybe 2022-07-10): Add some small banner that says this site uses cookies to authenticate? or is it not needed for authentication cookies.
 /// TODO (Wybe 2022-07-12): Rss apparently sometimes allows getting push notifications, via a "Cloud" element in the feed. Is it worth it to implement this?
 #[actix_web::main]

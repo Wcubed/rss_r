@@ -1,5 +1,5 @@
 use crate::login::Login;
-use crate::requests::{ApiEndpoint, Requests, Response};
+use crate::requests::{ApiEndpoint, Requests};
 use crate::rss_collection::RssCollection;
 use eframe::Frame;
 use egui::{Align2, Context, Ui, Vec2, Visuals};
