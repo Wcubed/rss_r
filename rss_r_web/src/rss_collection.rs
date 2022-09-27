@@ -445,71 +445,69 @@ impl FeedListDisplay {
 
         // TODO (Wybe 2022-09-27): Deduplicate code.
         if !self.feeds_without_tags.is_empty() {
-            ui.label("Untagged");
+            ui.collapsing("Untagged", |ui| {
+                for (url, info) in self.feeds_without_tags.iter() {
+                    let selected = match &self.selection {
+                        FeedSelection::Feed(selected_url) => selected_url == url,
+                        _ => false,
+                    };
 
-            for (url, info) in self.feeds_without_tags.iter() {
-                let selected = match &self.selection {
-                    FeedSelection::Feed(selected_url) => selected_url == url,
-                    _ => false,
-                };
+                    ui.horizontal(|ui| {
+                        if selectable_value(ui, selected, &info.name) {
+                            self.selection = FeedSelection::Feed(url.clone());
+                            response = FeedListDisplayResponse::SelectionChanged;
+                        }
 
-                ui.horizontal(|ui| {
-                    if selectable_value(ui, selected, &info.name) {
-                        self.selection = FeedSelection::Feed(url.clone());
-                        response = FeedListDisplayResponse::SelectionChanged;
-                    }
-
-                    if ui.button("Edit").clicked() && self.edit_feed_popup.is_none() {
-                        self.edit_feed_popup = Some(EditFeedPopup::new(
-                            url.clone(),
-                            info.clone(),
-                            self.known_tags.clone(),
-                        ));
-                    }
-                });
-            }
-
-            ui.separator();
+                        if ui.button("Edit").clicked() && self.edit_feed_popup.is_none() {
+                            self.edit_feed_popup = Some(EditFeedPopup::new(
+                                url.clone(),
+                                info.clone(),
+                                self.known_tags.clone(),
+                            ));
+                        }
+                    });
+                }
+            });
         }
 
         for (tag, feeds) in self.feed_tags.iter() {
-            let tag_selected = match &self.selection {
-                FeedSelection::Tag(selected_tag, _) => selected_tag == tag,
-                _ => false,
-            };
-
-            if selectable_value(ui, tag_selected, tag) {
-                self.selection = FeedSelection::Tag(
-                    tag.clone(),
-                    feeds.iter().map(|(url, _)| url.clone()).collect(),
-                );
-
-                response = FeedListDisplayResponse::SelectionChanged;
-            }
-
-            for (url, info) in feeds {
-                let selected = match &self.selection {
-                    FeedSelection::Feed(selected_url) => selected_url == url,
+            ui.collapsing(tag, |ui| {
+                let tag_selected = match &self.selection {
+                    FeedSelection::Tag(selected_tag, _) => selected_tag == tag,
                     _ => false,
                 };
 
-                ui.horizontal(|ui| {
-                    if selectable_value(ui, selected, &info.name) {
-                        self.selection = FeedSelection::Feed(url.clone());
-                        response = FeedListDisplayResponse::SelectionChanged;
-                    }
+                if selectable_value(ui, tag_selected, "All") {
+                    self.selection = FeedSelection::Tag(
+                        tag.clone(),
+                        feeds.iter().map(|(url, _)| url.clone()).collect(),
+                    );
 
-                    if ui.button("Edit").clicked() && self.edit_feed_popup.is_none() {
-                        self.edit_feed_popup = Some(EditFeedPopup::new(
-                            url.clone(),
-                            info.clone(),
-                            self.known_tags.clone(),
-                        ));
-                    }
-                });
-            }
+                    response = FeedListDisplayResponse::SelectionChanged;
+                }
 
-            ui.separator();
+                for (url, info) in feeds {
+                    let selected = match &self.selection {
+                        FeedSelection::Feed(selected_url) => selected_url == url,
+                        _ => false,
+                    };
+
+                    ui.horizontal(|ui| {
+                        if selectable_value(ui, selected, &info.name) {
+                            self.selection = FeedSelection::Feed(url.clone());
+                            response = FeedListDisplayResponse::SelectionChanged;
+                        }
+
+                        if ui.button("Edit").clicked() && self.edit_feed_popup.is_none() {
+                            self.edit_feed_popup = Some(EditFeedPopup::new(
+                                url.clone(),
+                                info.clone(),
+                                self.known_tags.clone(),
+                            ));
+                        }
+                    });
+                }
+            });
         }
 
         // Handle "Add feed" popup
