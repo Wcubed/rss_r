@@ -18,6 +18,8 @@ pub trait SaveInRonFile: Sized + Default + Serialize + DeserializeOwned {
     /// TODO (Wybe 2022-07-12): Handle errors.
     /// TODO (Wybe 2022-07-18): Make saving asynchronous, and happen in a background thread? maybe using `actix_web::rt::spawn_blocking();`
     fn save(&self) {
+        info!("Saving {}", Self::FILE_NAME);
+
         let mut path = PathBuf::from(PERSISTENCE_DIR);
         fs::create_dir_all(&path);
 

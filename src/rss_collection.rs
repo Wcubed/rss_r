@@ -11,10 +11,21 @@ use rss_com_lib::rss_feed::{FeedEntries, FeedEntry, FeedInfo};
 use rss_com_lib::Url;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::sync::RwLock;
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 pub struct RssCollections(RwLock<HashMap<UserId, RssCollection>>);
+
+impl Hash for RssCollections {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let collections = self.read().unwrap();
+        for (user, collection) in collections.iter() {
+            user.hash(state);
+            collection.hash(state);
+        }
+    }
+}
 
 /// TODO (Wybe 2022-09-25): Implement that this is saved every minute or so if it has changed. But not every time a request comes through.
 ///   Also, it should be saved when the server is stopped, for example by pressing Ctrl+C.
@@ -39,6 +50,17 @@ impl std::ops::DerefMut for RssCollections {
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct RssCollection(HashMap<Url, RssFeed>);
 
+impl Hash for RssCollection {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // The hashmap always returns the values in the same order, unless it has been changed.
+        // Which is exactly what we want, because the hash is used for change detection.
+        for (url, feed) in self.iter() {
+            url.hash(state);
+            feed.hash(state);
+        }
+    }
+}
+
 impl std::ops::Deref for RssCollection {
     type Target = HashMap<Url, RssFeed>;
 
@@ -56,7 +78,7 @@ impl std::ops::DerefMut for RssCollection {
 /// Represents a single rss feed.
 ///
 /// Implements [Default] so that adding new entries won't break the loading of old files.
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, Hash)]
 #[serde(default)]
 pub struct RssFeed {
     info: FeedInfo,
@@ -129,10 +151,6 @@ pub async fn get_feed_entries(
             HttpResponse::Forbidden().finish()
         }
     };
-
-    // The user's collection might have gotten updated.
-    // TODO (Wybe 2022-09-24): Save every x minutes if the collections have changed, instead of saving every time a request comes in?
-    collections.save();
 
     result
 }
@@ -238,7 +256,6 @@ pub async fn add_feed(
         }
     }
 
-    collections.save();
     HttpResponse::Ok().finish()
 }
 
@@ -295,7 +312,6 @@ pub async fn set_entry_read(
         };
     }
 
-    collections.save();
     // Send the request straight back to the client, so it doesn't need to remember all the
     // things it has requested from the server.
     HttpResponse::Ok().json(request.into_inner())
@@ -322,7 +338,6 @@ pub async fn set_feed_info(
         };
     }
 
-    collections.save();
     // Send the request straight back to the client, so it doesn't need to remember all the
     // things it has requested from the server.
     HttpResponse::Ok().json(request.into_inner())

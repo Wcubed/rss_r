@@ -4,7 +4,8 @@ use feed_rs::model;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::collections::{hash_map, HashMap, HashSet};
-use std::fmt::{Debug, Formatter, Write};
+use std::fmt::{Debug, Formatter};
+use std::hash::{Hash, Hasher};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, Eq, PartialEq)]
 #[serde(default)]
@@ -13,8 +14,28 @@ pub struct FeedInfo {
     pub tags: HashSet<String>,
 }
 
+impl Hash for FeedInfo {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        for tag in self.tags.iter() {
+            tag.hash(state)
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct FeedEntries(HashMap<EntryKey, FeedEntry>);
+
+impl Hash for FeedEntries {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // The hashmap always returns the values in the same order, unless it has been changed.
+        // Which is exactly what we want, because the hash is used for change detection.
+        for (key, value) in self.iter() {
+            key.hash(state);
+            value.hash(state);
+        }
+    }
+}
 
 impl FeedEntries {
     pub fn new(entries: HashMap<EntryKey, FeedEntry>) -> Self {
@@ -107,7 +128,7 @@ impl<'de> Deserialize<'de> for EntryKey {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Debug, Default, Hash)]
 #[serde(default)]
 pub struct FeedEntry {
     pub title: String,

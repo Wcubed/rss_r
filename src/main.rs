@@ -17,21 +17,27 @@ use crate::rss_collection::RssCollections;
 use crate::users::UserInfo;
 use actix_files::Files;
 use actix_identity::{CookieIdentityPolicy, IdentityService};
-use actix_web::cookie::time::Duration;
 use actix_web::cookie::SameSite;
 use actix_web::middleware::Logger;
-use actix_web::{web, App, HttpServer};
+use actix_web::rt::{spawn, time};
+use actix_web::{cookie, web, App, HttpServer};
 use actix_web_lab::web::redirect;
 use log::{error, info, warn, LevelFilter};
 use rustls::{Certificate, PrivateKey};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode};
+use std::collections::hash_map::DefaultHasher;
 use std::fs::File;
+use std::hash::{Hash, Hasher};
 use std::io::BufReader;
+use std::ptr::hash;
+use std::time::Duration;
 
 /// TODO (Wybe 2022-07-10): Add configuration options for ip address and port.
 const IP: &str = "0.0.0.0:8443";
-const LOGIN_DEADLINE: Duration = Duration::days(3);
+const LOGIN_DEADLINE: cookie::time::Duration = cookie::time::Duration::days(3);
+/// How often the feed collections will be saved, if they have changed in the meantime.
+const COLLECTIONS_SAVE_INTERVAL: Duration = Duration::from_secs(120);
 
 /// TODO (Wybe 2022-07-10): Add some small banner that says this site uses cookies to authenticate? or is it not needed for authentication cookies.
 /// TODO (Wybe 2022-07-12): Rss apparently sometimes allows getting push notifications, via a "Cloud" element in the feed. Is it worth it to implement this?
@@ -62,12 +68,36 @@ async fn main() -> std::io::Result<()> {
 
     // TODO (Wybe 2022-07-16): Check whether all users that have a collection actually exist.
     let rss_collections = RssCollections::load_or_default();
-    rss_collections.save();
     let web_rss_collections = web::Data::new(rss_collections);
 
     let rustls_config = load_rustls_config();
 
     info!("Starting Https server at https://{IP}");
+
+    // Spawn the task to periodically save the collections.
+    let collections_to_save = web_rss_collections.clone();
+    let collections_save_on_application_close = web_rss_collections.clone();
+    spawn(async move {
+        let mut save_interval = time::interval(COLLECTIONS_SAVE_INTERVAL);
+
+        let mut hasher = DefaultHasher::new();
+        collections_to_save.hash(&mut hasher);
+        let mut last_save_hash = hasher.finish();
+
+        loop {
+            save_interval.tick().await;
+
+            let mut hasher = DefaultHasher::new();
+            collections_to_save.hash(&mut hasher);
+            let new_hash = hasher.finish();
+
+            if new_hash != last_save_hash {
+                // Collections have changed. Save them.
+                collections_to_save.save();
+                last_save_hash = new_hash;
+            }
+        }
+    });
 
     HttpServer::new(move || {
         // TODO (Wybe 2022-07-11): Add an actual key?
@@ -109,7 +139,12 @@ async fn main() -> std::io::Result<()> {
     })
     .bind_rustls(IP, rustls_config)?
     .run()
-    .await
+    .await?;
+
+    // Make sure we don't loose anything that happened since the last save.
+    collections_save_on_application_close.save();
+
+    Ok(())
 }
 
 fn load_rustls_config() -> rustls::ServerConfig {
