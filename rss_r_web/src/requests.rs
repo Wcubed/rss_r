@@ -140,6 +140,7 @@ pub enum ApiEndpoint {
     /// Get all the entries in the requested feeds.
     GetFeedEntries,
     SetEntryRead,
+    SetFeedInfo,
 }
 
 impl ApiEndpoint {
@@ -159,6 +160,7 @@ impl ApiEndpoint {
             Self::ListFeeds => "list_feeds",
             Self::GetFeedEntries => "get_feed_entries",
             Self::SetEntryRead => "set_entry_read",
+            Self::SetFeedInfo => "set_feed_info",
         };
 
         ehttp::Request::post(format!("../api/{}", endpoint), body)

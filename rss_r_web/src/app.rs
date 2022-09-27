@@ -73,7 +73,8 @@ impl eframe::App for RssApp {
 
         if self.login_view.is_none() {
             egui::SidePanel::left("side-panel").show(ctx, |ui| {
-                self.rss_collection.show_list(ctx, ui, &mut self.requests)
+                self.rss_collection
+                    .show_feed_list(ctx, ui, &mut self.requests)
             });
         }
 

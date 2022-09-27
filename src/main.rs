@@ -30,7 +30,7 @@ use std::fs::File;
 use std::io::BufReader;
 
 /// TODO (Wybe 2022-07-10): Add configuration options for ip address and port.
-const IP: &str = "127.0.0.1:8443";
+const IP: &str = "0.0.0.0:8443";
 const LOGIN_DEADLINE: Duration = Duration::days(3);
 
 /// TODO (Wybe 2022-07-10): Add some small banner that says this site uses cookies to authenticate? or is it not needed for authentication cookies.
@@ -103,7 +103,8 @@ async fn main() -> std::io::Result<()> {
                     .service(rss_collection::get_feed_entries)
                     .service(rss_collection::add_feed)
                     .service(rss_collection::list_feeds)
-                    .service(rss_collection::set_entry_read),
+                    .service(rss_collection::set_entry_read)
+                    .service(rss_collection::set_feed_info),
             )
     })
     .bind_rustls(IP, rustls_config)?

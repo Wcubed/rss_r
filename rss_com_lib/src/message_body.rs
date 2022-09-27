@@ -22,7 +22,7 @@ pub struct IsUrlAnRssFeedResponse {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AddFeedRequest {
     pub url: Url,
-    pub name: String,
+    pub info: FeedInfo,
 }
 
 /// Response for `/api/list_feeds`
@@ -54,4 +54,13 @@ pub struct SetEntryReadRequestAndResponse {
     pub feed_url: Url,
     pub entry_key: EntryKey,
     pub read: bool,
+}
+
+/// Request and response for `/api/set_feed_info`
+/// The server sends the request straight back, so the client doesn't have to remember what
+/// it requested from the server, and can simply "copy the server's notes".
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SetFeedInfoRequestAndResponse {
+    pub feed_url: Url,
+    pub info: FeedInfo,
 }

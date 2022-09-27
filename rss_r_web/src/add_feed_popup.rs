@@ -1,10 +1,13 @@
+use crate::edit_feed_popup::TagSelector;
 use crate::requests::{ApiEndpoint, Requests, Response};
+use crate::{POPUP_ALIGN, POPUP_OFFSET};
 use egui::{Align2, Button, Context, TextEdit, Ui, Vec2};
 use log::warn;
 use rss_com_lib::message_body::{AddFeedRequest, IsUrlAnRssFeedRequest, IsUrlAnRssFeedResponse};
+use rss_com_lib::rss_feed::FeedInfo;
 use rss_com_lib::Url;
+use std::collections::HashSet;
 
-#[derive(Default)]
 pub struct AddFeedPopup {
     input_url: String,
     /// Result<(url, name), error_message>
@@ -12,12 +15,18 @@ pub struct AddFeedPopup {
     /// The url is saved separately from the url input by the user, because they can change it
     /// at any point, and then it might not be a valid rss url anymore.
     /// TODO (Wybe 2022-07-14): Provision for multiple feeds being available?
-    response: Option<Result<(Url, String), String>>,
+    feed_test_response: Option<Result<(Url, String), String>>,
+    tag_selector: TagSelector,
 }
 
 impl AddFeedPopup {
     pub fn new() -> Self {
-        Default::default()
+        AddFeedPopup {
+            input_url: "".to_string(),
+            feed_test_response: None,
+            // TODO (Wybe 2022-09-27): Add tags we already know about.
+            tag_selector: TagSelector::new(&HashSet::new()),
+        }
     }
 
     pub fn show(&mut self, ctx: &Context, requests: &mut Requests) -> AddFeedPopupResponse {
@@ -26,18 +35,26 @@ impl AddFeedPopup {
 
         egui::Window::new("Add feed")
             .open(&mut is_open)
-            .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
+            .anchor(POPUP_ALIGN, POPUP_OFFSET)
             .resizable(false)
             .collapsible(false)
             .show(ctx, |ui| {
                 self.show_url_input(ui, requests);
 
-                if let Some(response) = &self.response {
+                if let Some(response) = &self.feed_test_response {
                     match response {
                         Ok((url, name)) => {
                             ui.label(format!("Feed found: {}", name));
 
-                            AddFeedPopup::show_add_feed_button(ui, requests, url, name);
+                            self.tag_selector.show(ui);
+
+                            AddFeedPopup::show_add_feed_button(
+                                ui,
+                                requests,
+                                url,
+                                name,
+                                &self.tag_selector,
+                            );
                         }
                         Err(error_message) => {
                             ui.colored_label(egui::Color32::RED, error_message);
@@ -93,7 +110,7 @@ impl AddFeedPopup {
                 };
                 requests.new_request_with_json_body(ApiEndpoint::IsUrlAnRssFeed, &request_body);
 
-                self.response = None;
+                self.feed_test_response = None;
             }
         });
 
@@ -105,10 +122,12 @@ impl AddFeedPopup {
                     {
                         match rss_response.result {
                             Ok(name) => {
-                                self.response = Some(Ok((rss_response.requested_url, name)));
+                                self.feed_test_response =
+                                    Some(Ok((rss_response.requested_url, name)));
                             }
                             Err(err) => {
-                                self.response = Some(Err(format!("No rss feed found: {}", err)));
+                                self.feed_test_response =
+                                    Some(Err(format!("No rss feed found: {}", err)));
                             }
                         }
                     }
@@ -117,7 +136,7 @@ impl AddFeedPopup {
                         "Something went wrong while testing the rss feed. Response was: {:?}",
                         response
                     );
-                    self.response = Some(Err(
+                    self.feed_test_response = Some(Err(
                         "Something went wrong while testing for an rss feed.".to_string(),
                     ));
                 }
@@ -127,7 +146,13 @@ impl AddFeedPopup {
         }
     }
 
-    fn show_add_feed_button(ui: &mut Ui, requests: &mut Requests, feed_url: &Url, feed_name: &str) {
+    fn show_add_feed_button(
+        ui: &mut Ui,
+        requests: &mut Requests,
+        feed_url: &Url,
+        feed_name: &str,
+        tag_selector: &TagSelector,
+    ) {
         if ui
             .add_enabled(
                 !requests.has_request(ApiEndpoint::AddFeed),
@@ -139,7 +164,10 @@ impl AddFeedPopup {
                 ApiEndpoint::AddFeed,
                 AddFeedRequest {
                     url: feed_url.clone(),
-                    name: feed_name.to_string(),
+                    info: FeedInfo {
+                        name: feed_name.to_string(),
+                        tags: tag_selector.get_selected_tags(),
+                    },
                 },
             );
         }

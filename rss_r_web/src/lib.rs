@@ -3,6 +3,7 @@
 
 mod add_feed_popup;
 mod app;
+mod edit_feed_popup;
 mod hyperlink;
 mod login;
 mod requests;
@@ -13,6 +14,12 @@ use log::Level;
 
 #[cfg(target_arch = "wasm32")]
 use eframe::wasm_bindgen::{self, prelude::*};
+use egui::{Align2, Vec2};
+
+/// All the popups should be aligned to this location.
+const POPUP_ALIGN: Align2 = Align2::CENTER_TOP;
+/// All the popups should be offset from [POPUP_ALIGN] by this much.
+const POPUP_OFFSET: Vec2 = Vec2::new(0., 40.0);
 
 /// This is the entry-point for all the web-assembly.
 /// This is called once from the HTML.

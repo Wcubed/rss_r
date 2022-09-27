@@ -5,6 +5,7 @@ use log::{info, warn};
 use rss_com_lib::message_body::{
     AddFeedRequest, GetFeedEntriesRequest, GetFeedEntriesResponse, IsUrlAnRssFeedRequest,
     IsUrlAnRssFeedResponse, ListFeedsResponse, SetEntryReadRequestAndResponse,
+    SetFeedInfoRequestAndResponse,
 };
 use rss_com_lib::rss_feed::{EntryKey, FeedEntries, FeedEntry, FeedInfo};
 use rss_com_lib::Url;
@@ -63,12 +64,9 @@ pub struct RssFeed {
 }
 
 impl RssFeed {
-    pub fn new(name: String) -> Self {
+    pub fn new(info: FeedInfo) -> Self {
         RssFeed {
-            info: FeedInfo {
-                name,
-                ..Default::default()
-            },
+            info,
             entries: FeedEntries::default(),
         }
     }
@@ -167,8 +165,15 @@ async fn get_feeds_from_cache_or_update(
 
                     let feed = match collection.get_mut(url) {
                         None => {
+                            // This feed is not yet in the user's collection. Add it.
                             let title = feed.title.map(|text| text.content).unwrap_or_default();
-                            collection.insert(url.clone(), RssFeed::new(title));
+                            collection.insert(
+                                url.clone(),
+                                RssFeed::new(FeedInfo {
+                                    name: title,
+                                    tags: HashSet::new(),
+                                }),
+                            );
                             collection.get_mut(url).unwrap()
                         }
                         Some(feed) => feed,
@@ -222,7 +227,7 @@ pub async fn add_feed(
 
         if !collection.contains_key(&request.url) {
             // This feed is new for the user.
-            collection.insert(request.url.clone(), RssFeed::new(request.name.clone()));
+            collection.insert(request.url.clone(), RssFeed::new(request.info.clone()));
         } else {
             info!(
                 "User `{}` already had feed `{}` in their collection",
@@ -279,6 +284,33 @@ pub async fn set_entry_read(
                     // Entry does not exist in this feed.
                     return HttpResponse::Unauthorized().finish();
                 }
+            } else {
+                // Feed does not exist for this user.
+                return HttpResponse::Unauthorized().finish();
+            }
+        } else {
+            // A collection does not exist for this user.
+            return HttpResponse::Unauthorized().finish();
+        };
+    }
+
+    collections.save();
+    // Send the request straight back to the client, so it doesn't need to remember all the
+    // things it has requested from the server.
+    HttpResponse::Ok().json(request.into_inner())
+}
+
+#[post("/set_feed_info")]
+pub async fn set_feed_info(
+    request: web::Json<SetFeedInfoRequestAndResponse>,
+    auth: Authenticated,
+    collections: web::Data<RssCollections>,
+) -> impl Responder {
+    {
+        let mut collections = collections.write().unwrap();
+        if let Some(collection) = collections.get_mut(auth.user_id()) {
+            if let Some(feed) = collection.get_mut(&request.feed_url) {
+                feed.info = request.info.clone();
             } else {
                 // Feed does not exist for this user.
                 return HttpResponse::Unauthorized().finish();

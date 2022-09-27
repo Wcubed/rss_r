@@ -1,7 +1,9 @@
 use crate::add_feed_popup::{AddFeedPopup, AddFeedPopupResponse};
+use crate::edit_feed_popup::{EditFeedPopup, EditFeedPopupResponse};
 use crate::hyperlink::NewTabHyperlink;
 use crate::requests::{ApiEndpoint, Requests, Response};
 use chrono::Local;
+use egui::Key::P;
 use egui::{Color32, Context, Label, RichText, Ui};
 use log::info;
 use rss_com_lib::message_body::{
@@ -26,6 +28,7 @@ pub struct RssCollection {
     /// A subset of all the entries in the `feeds` hashmap.
     selected_feed_entries: Vec<DisplayFeedEntry>,
     add_feed_popup: Option<AddFeedPopup>,
+    edit_feed_popup: Option<EditFeedPopup>,
 }
 
 impl RssCollection {
@@ -33,7 +36,7 @@ impl RssCollection {
         Default::default()
     }
 
-    pub fn show_list(&mut self, ctx: &Context, ui: &mut Ui, requests: &mut Requests) {
+    pub fn show_feed_list(&mut self, ctx: &Context, ui: &mut Ui, requests: &mut Requests) {
         if let Some(popup) = &mut self.add_feed_popup {
             match popup.show(ctx, requests) {
                 AddFeedPopupResponse::None => {} // Nothing to do.
@@ -43,6 +46,23 @@ impl RssCollection {
                 AddFeedPopupResponse::FeedAdded => {
                     self.add_feed_popup = None;
                     requests.new_request_without_body(ApiEndpoint::ListFeeds);
+                }
+            }
+        }
+
+        if let Some(popup) = &mut self.edit_feed_popup {
+            match popup.show(ctx, requests) {
+                EditFeedPopupResponse::None => {} // Nothing to do.
+                EditFeedPopupResponse::ClosePopup => {
+                    self.edit_feed_popup = None;
+                }
+                EditFeedPopupResponse::FeedInfoEdited(url, new_info) => {
+                    // Edit was a success. Close the popup.
+                    self.edit_feed_popup = None;
+
+                    if let Some(feed) = self.feeds.get_mut(&url) {
+                        feed.0 = new_info;
+                    }
                 }
             }
         }
@@ -59,11 +79,16 @@ impl RssCollection {
         ui.separator();
 
         for (url, (info, _)) in self.feeds.iter() {
-            ui.selectable_value(
-                &mut self.feed_selection,
-                FeedSelection::Feed(url.clone()),
-                &info.name,
-            );
+            ui.horizontal(|ui| {
+                ui.selectable_value(
+                    &mut self.feed_selection,
+                    FeedSelection::Feed(url.clone()),
+                    &info.name,
+                );
+                if ui.button("Edit").clicked() && self.edit_feed_popup.is_none() {
+                    self.edit_feed_popup = Some(EditFeedPopup::new(url.clone(), info.clone()))
+                }
+            });
         }
 
         if previous_selection != self.feed_selection {
@@ -77,20 +102,22 @@ impl RssCollection {
                 // TODO (Wybe 2022-07-16): Handle errors
                 if let Response::Ok(body) = response {
                     if let Ok(feeds_response) = serde_json::from_str::<ListFeedsResponse>(&body) {
-                        // Add new feeds
+                        // Add new feeds and update existing ones.
                         for (url, info) in feeds_response.feeds.iter() {
-                            if !self.feeds.contains_key(url) {
+                            if let Some(feed) = self.feeds.get_mut(url) {
+                                // Feed exists. Update it's info.
+                                feed.0 = info.clone();
+                            } else {
                                 self.feeds.insert(url.clone(), (info.clone(), None));
                             }
                         }
+
+                        // TODO (Wybe 2022-09-25): Remove feeds that are no longer listed.
 
                         // We received knowledge of what feeds are in the users collection.
                         // So we want to update the users currently viewed entries based
                         // on this new info.
                         self.update_feed_entries_based_on_selection(requests);
-
-                        // TODO (Wybe 2022-07-16): Remove those no longer listed.
-                        // TODO (Wybe 2022-07-16): update any existing feeds?
                     }
                 }
             } else {
@@ -203,21 +230,26 @@ impl RssCollection {
                                 if let Some(link) = &disp.entry.link {
                                     ui.add(NewTabHyperlink::from_label_and_url("Open", link));
 
-                                    if ui
-                                        .add(NewTabHyperlink::from_label_and_url(
-                                            "Open mark read",
-                                            link,
-                                        ))
-                                        .clicked()
-                                        && !disp.entry.read
-                                    {
-                                        // User wants to mark this entry as read.
-                                        set_entry_read_request =
-                                            Some(SetEntryReadRequestAndResponse {
-                                                feed_url: disp.feed_url.clone(),
-                                                entry_key: disp.key.clone(),
-                                                read: true,
-                                            });
+                                    if !disp.read {
+                                        // Item not read, so we add an option to open and mark it "read" at the same time.
+                                        if ui
+                                            .add(NewTabHyperlink::from_label_and_url(
+                                                "Open mark read",
+                                                link,
+                                            ))
+                                            .clicked()
+                                            && !disp.entry.read
+                                        {
+                                            // User wants to mark this entry as read.
+                                            set_entry_read_request =
+                                                Some(SetEntryReadRequestAndResponse {
+                                                    feed_url: disp.feed_url.clone(),
+                                                    entry_key: disp.key.clone(),
+                                                    read: true,
+                                                });
+                                        }
+                                    } else {
+                                        ui.label("");
                                     }
                                 } else {
                                     // No link, so add empty labels to skip these columns.

@@ -3,14 +3,14 @@ use chrono::{DateTime, TimeZone, Utc};
 use feed_rs::model;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
-use std::collections::{hash_map, HashMap};
+use std::collections::{hash_map, HashMap, HashSet};
 use std::fmt::{Debug, Formatter, Write};
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Eq, PartialEq)]
 #[serde(default)]
 pub struct FeedInfo {
     pub name: String,
-    pub tags: Vec<String>,
+    pub tags: HashSet<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
