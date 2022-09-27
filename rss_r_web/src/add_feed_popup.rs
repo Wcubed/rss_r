@@ -1,7 +1,7 @@
 use crate::edit_feed_popup::TagSelector;
 use crate::requests::{ApiEndpoint, Requests, Response};
 use crate::{POPUP_ALIGN, POPUP_OFFSET};
-use egui::{Align2, Button, Context, TextEdit, Ui, Vec2};
+use egui::{Button, Context, TextEdit, Ui};
 use log::warn;
 use rss_com_lib::message_body::{AddFeedRequest, IsUrlAnRssFeedRequest, IsUrlAnRssFeedResponse};
 use rss_com_lib::rss_feed::FeedInfo;

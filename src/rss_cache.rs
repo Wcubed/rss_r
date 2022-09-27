@@ -1,4 +1,4 @@
-use actix_web_lab::__reexports::futures_util::{future, StreamExt};
+use actix_web_lab::__reexports::futures_util::future;
 use chrono::{DateTime, Duration, Utc};
 use feed_rs::model;
 use rss_com_lib::Url;

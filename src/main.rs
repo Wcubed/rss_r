@@ -1,5 +1,5 @@
 #![deny(unsafe_code)]
-#![warn(rust_2018_idioms)]
+#![warn(rust_2018_idioms, clippy::all)]
 
 mod auth;
 mod auth_middleware;
@@ -30,7 +30,6 @@ use std::collections::hash_map::DefaultHasher;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::BufReader;
-use std::ptr::hash;
 use std::time::Duration;
 
 /// TODO (Wybe 2022-07-10): Add configuration options for ip address and port.

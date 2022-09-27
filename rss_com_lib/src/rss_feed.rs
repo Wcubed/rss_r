@@ -148,7 +148,9 @@ impl FeedEntry {
             .published
             .as_ref()
             .cloned()
-            .unwrap_or_else(|| default_date.into())
+            // If there is no `published` date, try the `updated` instead.
+            .or(item.updated)
+            .unwrap_or(default_date)
             .with_timezone(&Utc);
 
         let entry = Self {
@@ -156,11 +158,7 @@ impl FeedEntry {
                 Some(title) => title.content.clone(),
                 None => "No title".to_string(),
             },
-            link: item
-                .links
-                .first()
-                .clone()
-                .map(|link| Url::new(link.href.clone())),
+            link: item.links.first().map(|link| Url::new(link.href.clone())),
             pub_date,
             read: false,
         };

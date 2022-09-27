@@ -1,5 +1,5 @@
 #![deny(unsafe_code)]
-#![warn(rust_2018_idioms)]
+#![warn(rust_2018_idioms, clippy::all)]
 
 mod add_feed_popup;
 mod app;

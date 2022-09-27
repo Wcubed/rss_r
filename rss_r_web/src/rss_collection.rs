@@ -404,7 +404,7 @@ impl FeedListDisplay {
                 if let Some(feeds) = feeds_by_tag.get(tag) {
                     FeedSelection::Tag(
                         tag.clone(),
-                        feeds.iter().map(|(url, info)| url.clone()).collect(),
+                        feeds.iter().map(|(url, _info)| url.clone()).collect(),
                     )
                 } else {
                     // Selected tag no longer exists.

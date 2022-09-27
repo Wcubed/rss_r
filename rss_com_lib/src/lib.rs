@@ -1,5 +1,5 @@
 #![deny(unsafe_code)]
-#![warn(rust_2018_idioms)]
+#![warn(rust_2018_idioms, clippy::all)]
 
 pub mod message_body;
 pub mod rss_feed;
