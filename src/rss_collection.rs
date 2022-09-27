@@ -334,7 +334,7 @@ mod tests {
     use crate::RssCollections;
     use pretty_assertions::assert_eq;
     use ron::ser::{to_string_pretty, PrettyConfig};
-    use rss_com_lib::rss_feed::{EntryKey, FeedEntries, FeedEntry};
+    use rss_com_lib::rss_feed::{EntryKey, FeedEntries, FeedEntry, FeedInfo};
     use rss_com_lib::Url;
     use std::collections::HashMap;
 
@@ -365,7 +365,10 @@ mod tests {
     #[test]
     fn test_updating_feed_leaves_existing_entries_intact() {
         // Given
-        let mut feed = RssFeed::new("Feed".to_string());
+        let mut feed = RssFeed::new(FeedInfo {
+            name: "Test".to_string(),
+            tags: Default::default(),
+        });
 
         let entry_1 = FeedEntry {
             title: "Title".to_string(),

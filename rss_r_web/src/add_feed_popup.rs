@@ -20,12 +20,12 @@ pub struct AddFeedPopup {
 }
 
 impl AddFeedPopup {
-    pub fn new() -> Self {
+    pub fn new(known_tags: HashSet<String>) -> Self {
         AddFeedPopup {
             input_url: "".to_string(),
             feed_test_response: None,
             // TODO (Wybe 2022-09-27): Add tags we already know about.
-            tag_selector: TagSelector::new(&HashSet::new()),
+            tag_selector: TagSelector::new(HashSet::new(), known_tags),
         }
     }
 
