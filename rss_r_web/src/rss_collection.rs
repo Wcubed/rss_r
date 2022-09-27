@@ -441,8 +441,6 @@ impl FeedListDisplay {
             response = FeedListDisplayResponse::SelectionChanged;
         }
 
-        ui.separator();
-
         // TODO (Wybe 2022-09-27): Deduplicate code.
         if !self.feeds_without_tags.is_empty() {
             ui.collapsing("Untagged", |ui| {

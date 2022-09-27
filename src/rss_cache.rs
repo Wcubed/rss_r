@@ -1,16 +1,34 @@
 use actix_web_lab::__reexports::futures_util::future;
 use chrono::{DateTime, Duration, Utc};
 use feed_rs::model;
+use reqwest::ClientBuilder;
 use rss_com_lib::Url;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::sync::RwLock;
 
+/// Maximum time a request to a feed's link may be ongoing, before we time out.
+const FEED_UPDATE_TIMEOUT: core::time::Duration = core::time::Duration::from_secs(5);
+
 /// Url -> Feed.
 /// TODO (Wybe 2022-09-19): It would probably be better to remember feed entries in a central location, and only store per-user info for each of them in the user's locations.
 /// TODO (Wybe 2022-07-18): rss feeds sometimes have a `Cloud` entry that allows subscribing. How do we do this?
-#[derive(Default)]
-pub struct RssCache(RwLock<HashMap<Url, CacheEntry>>);
+pub struct RssCache {
+    cache: RwLock<HashMap<Url, CacheEntry>>,
+    reqwest_client: reqwest::Client,
+}
+
+impl Default for RssCache {
+    fn default() -> Self {
+        RssCache {
+            cache: Default::default(),
+            reqwest_client: ClientBuilder::new()
+                .timeout(FEED_UPDATE_TIMEOUT)
+                .build()
+                .expect("Could not build reqwest client"),
+        }
+    }
+}
 
 impl RssCache {
     /// Gets all the listed feeds.
@@ -37,7 +55,7 @@ impl RssCache {
             let max_cache_age = Duration::hours(1);
 
             // Check the cache.
-            let cache = self.0.read().unwrap();
+            let cache = self.cache.read().unwrap();
             if let Some(entry) = cache.get(url) {
                 let now = Utc::now();
 
@@ -56,7 +74,7 @@ impl RssCache {
             Some(feed) => (url.clone(), Ok(feed)),
             None => {
                 // Feed is not in cache, or is too old.
-                let result = RssCache::download_feed(url).await;
+                let result = self.download_feed(url).await;
                 if let Ok(feed) = &result {
                     self.add_to_cache(url, feed.clone());
                 }
@@ -69,7 +87,7 @@ impl RssCache {
     fn add_to_cache(&self, url: &Url, feed: model::Feed) {
         let now = Utc::now();
 
-        let mut cache = self.0.write().unwrap();
+        let mut cache = self.cache.write().unwrap();
         cache.insert(
             url.clone(),
             CacheEntry {
@@ -79,9 +97,15 @@ impl RssCache {
         );
     }
 
-    async fn download_feed(url: &Url) -> Result<model::Feed, Box<dyn Error>> {
+    async fn download_feed(&self, url: &Url) -> Result<model::Feed, Box<dyn Error>> {
         // TODO (Wybe 2022-07-18): Sanitize url.
-        let content = reqwest::get(url.clone_string()).await?.bytes().await?;
+        let content = self
+            .reqwest_client
+            .get(url.clone_string())
+            .send()
+            .await?
+            .bytes()
+            .await?;
         let feed = feed_rs::parser::parse(&content[..])?;
         Ok(feed)
     }
