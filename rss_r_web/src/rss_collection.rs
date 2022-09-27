@@ -10,7 +10,6 @@ use rss_com_lib::message_body::{
 };
 use rss_com_lib::rss_feed::{EntryKey, FeedEntries, FeedEntry, FeedInfo};
 use rss_com_lib::Url;
-use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
@@ -25,6 +24,8 @@ pub struct RssCollection {
     feeds_display: FeedListDisplay,
     /// A subset of all the entries in the `feeds` hashmap.
     selected_feed_entries: Vec<DisplayFeedEntry>,
+    /// Whether or not to show feed entries that have already been read.
+    show_unread_entries: bool,
 }
 
 impl RssCollection {
@@ -33,6 +34,13 @@ impl RssCollection {
     }
 
     pub fn show_feed_list(&mut self, ui: &mut Ui, requests: &mut Requests) {
+        let last_show_read_entries = self.show_unread_entries;
+        ui.checkbox(&mut self.show_unread_entries, "Show read entries");
+
+        if last_show_read_entries != self.show_unread_entries {
+            self.update_feed_entries_based_on_selection(requests);
+        }
+
         match self.feeds_display.show(ui, requests) {
             FeedListDisplayResponse::None => {} // Nothing to do
             FeedListDisplayResponse::FeedInfoEdited(url, new_info) => {
@@ -42,11 +50,9 @@ impl RssCollection {
 
                 self.feeds_display.update_feeds(&self.feeds);
             }
-            FeedListDisplayResponse::SelectionChanged => self
-                .update_feed_entries_based_on_selection(
-                    requests,
-                    self.feeds_display.get_current_selection(),
-                ),
+            FeedListDisplayResponse::SelectionChanged => {
+                self.update_feed_entries_based_on_selection(requests)
+            }
         }
 
         if requests.has_request(ApiEndpoint::ListFeeds) {
@@ -71,10 +77,7 @@ impl RssCollection {
                         // We received knowledge of what feeds are in the users collection.
                         // So we want to update the users currently viewed entries based
                         // on this new info.
-                        self.update_feed_entries_based_on_selection(
-                            requests,
-                            self.feeds_display.get_current_selection(),
-                        );
+                        self.update_feed_entries_based_on_selection(requests);
                     }
                 }
             } else {
@@ -101,10 +104,7 @@ impl RssCollection {
                             }
                         }
 
-                        self.update_feed_entries_based_on_selection(
-                            requests,
-                            self.feeds_display.get_current_selection(),
-                        );
+                        self.update_feed_entries_based_on_selection(requests);
                     }
                 }
             } else {
@@ -125,10 +125,7 @@ impl RssCollection {
                 }
 
                 // TODO (Wybe 2022-09-25): Can we do better than updating the complete list of entries?
-                self.update_feed_entries_based_on_selection(
-                    requests,
-                    self.feeds_display.get_current_selection(),
-                );
+                self.update_feed_entries_based_on_selection(requests);
             }
         }
 
@@ -231,18 +228,14 @@ impl RssCollection {
         }
     }
 
-    fn update_feed_entries_based_on_selection(
-        &mut self,
-        requests: &mut Requests,
-        selection: FeedSelection,
-    ) {
+    fn update_feed_entries_based_on_selection(&mut self, requests: &mut Requests) {
         self.selected_feed_entries = Vec::new();
 
         // TODO (Wybe 2022-07-18): Queue request if another request is outgoing.
         // TODO (Wybe 2022-07-18): Change the main display already to whatever we have loaded from our local storage?
         //                          and update the display when the request returns.
         let mut urls_to_display = HashSet::new();
-        match selection {
+        match self.feeds_display.get_current_selection() {
             FeedSelection::All => {
                 for url in self.feeds.keys() {
                     urls_to_display.insert(url.clone());
@@ -267,6 +260,11 @@ impl RssCollection {
                 if let Some(entries) = maybe_entries {
                     // TODO (Wybe 2022-07-19): there is probably a more efficient way than cloning everything.
                     for (key, entry) in entries.iter() {
+                        if entry.read && !self.show_unread_entries {
+                            // This entry doesn't need to be shown, because it is already read.
+                            continue;
+                        }
+
                         self.selected_feed_entries.push(DisplayFeedEntry::new(
                             entry,
                             key,
@@ -432,16 +430,16 @@ impl FeedListDisplay {
     fn show(&mut self, ui: &mut Ui, requests: &mut Requests) -> FeedListDisplayResponse {
         let mut response = FeedListDisplayResponse::None;
 
-        ui.horizontal(|ui| {
-            if selectable_value(ui, self.selection == FeedSelection::All, "All feeds") {
-                self.selection = FeedSelection::All;
-                response = FeedListDisplayResponse::SelectionChanged;
-            }
+        if ui.button("Add feed").clicked() && self.add_feed_popup.is_none() {
+            self.add_feed_popup = Some(AddFeedPopup::new(self.known_tags.clone()));
+        }
 
-            if ui.button("Add feed").clicked() && self.add_feed_popup.is_none() {
-                self.add_feed_popup = Some(AddFeedPopup::new(self.known_tags.clone()));
-            }
-        });
+        ui.separator();
+
+        if selectable_value(ui, self.selection == FeedSelection::All, "All feeds") {
+            self.selection = FeedSelection::All;
+            response = FeedListDisplayResponse::SelectionChanged;
+        }
 
         ui.separator();
 
@@ -571,5 +569,5 @@ impl Default for FeedSelection {
 
 /// A selectable value that will return true if it has been selected by the user.
 fn selectable_value(ui: &mut Ui, mut selected: bool, text: &str) -> bool {
-    ui.selectable_value(&mut selected, true, text).clicked()
+    ui.toggle_value(&mut selected, text).clicked()
 }
