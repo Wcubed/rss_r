@@ -41,12 +41,12 @@ impl AddFeedPopup {
             .show(ctx, |ui| {
                 self.show_url_input(ui, requests);
 
+                self.tag_selector.show(ui);
+
                 if let Some(response) = &self.feed_test_response {
                     match response {
                         Ok((url, name)) => {
                             ui.label(format!("Feed found: {}", name));
-
-                            self.tag_selector.show(ui);
 
                             AddFeedPopup::show_add_feed_button(
                                 ui,

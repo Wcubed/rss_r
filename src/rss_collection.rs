@@ -262,6 +262,7 @@ pub async fn add_feed(
 /// Checks a given rss feed for existence.
 /// Sends back the title of the feed if it exists.
 /// TODO (Wybe 2022-07-14): Can we do Rust object notation, instead of parsing from Json?
+/// TODO (Wybe 2022-09-27): Also allow linking the main page of a comic, and figuring out by any rss/feed href where the feed is located.
 #[post("/is_url_an_rss_feed")]
 pub async fn is_url_an_rss_feed(
     request: web::Json<IsUrlAnRssFeedRequest>,
