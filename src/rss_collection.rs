@@ -7,7 +7,7 @@ use rss_com_lib::message_body::{
     IsUrlAnRssFeedResponse, ListFeedsResponse, SetEntryReadRequestAndResponse,
     SetFeedInfoRequestAndResponse,
 };
-use rss_com_lib::rss_feed::{EntryKey, FeedEntries, FeedEntry, FeedInfo};
+use rss_com_lib::rss_feed::{FeedEntries, FeedEntry, FeedInfo};
 use rss_com_lib::Url;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -139,7 +139,7 @@ pub async fn get_feed_entries(
 
 /// Returns requested feeds, keyed by their url, or an error message
 /// if that feed doesn't exist.
-/// Makes any needed requests to each feed's original url concurrently.
+/// Makes any needed requests to each feed's original url.
 /// TODO (Wybe 2022-07-19): Don't block on collection?
 /// TODO (Wybe 2022-07-19): Rename this
 async fn get_feeds_from_cache_or_update(
@@ -150,10 +150,11 @@ async fn get_feeds_from_cache_or_update(
 ) -> HashMap<Url, Result<(FeedInfo, FeedEntries), String>> {
     let mut results = HashMap::new();
 
-    for url in requests.iter() {
-        let result = if collection.contains_key(url) {
-            // TODO (Wybe 2022-07-19): Somehow await the get_feed_entries all at the same time? Instead of each one after the other.
-            match cache.get_feed(url).await {
+    let feeds_from_cache = cache.get_feeds(requests).await;
+
+    for (url, maybe_feed) in feeds_from_cache.into_iter() {
+        let result = if collection.contains_key(&url) {
+            match maybe_feed {
                 Ok(feed) => {
                     // Update the user's collection and add it to the results.
                     let entries = FeedEntries::new(
@@ -163,7 +164,7 @@ async fn get_feeds_from_cache_or_update(
                             .collect(),
                     );
 
-                    let feed = match collection.get_mut(url) {
+                    let feed = match collection.get_mut(&url) {
                         None => {
                             // This feed is not yet in the user's collection. Add it.
                             let title = feed.title.map(|text| text.content).unwrap_or_default();
@@ -174,13 +175,12 @@ async fn get_feeds_from_cache_or_update(
                                     tags: HashSet::new(),
                                 }),
                             );
-                            collection.get_mut(url).unwrap()
+                            collection.get_mut(&url).unwrap()
                         }
                         Some(feed) => feed,
                     };
 
                     feed.update_entries(entries);
-                    // TODO (Wybe 2022-09-20): Can we circumvent this clone? And take the reference instead? Or is that performance optimization not needed (probably not, given 1 user)?
                     Ok((feed.info.clone(), feed.entries.clone()))
                 }
                 Err(e) => Err(e.to_string()),
@@ -257,7 +257,8 @@ pub async fn is_url_an_rss_feed(
         request.url,
     );
 
-    let result = match cache.get_feed(&request.url).await {
+    let (_, maybe_feed) = cache.get_feed(&request.url).await;
+    let result = match maybe_feed {
         Ok(feed) => Ok(feed.title.map(|text| text.content).unwrap_or_default()),
         Err(err) => Err(err.to_string()),
     };
