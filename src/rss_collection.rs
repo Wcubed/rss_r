@@ -171,38 +171,30 @@ async fn get_feeds_from_cache_or_update(
     let feeds_from_cache = cache.get_feeds(requests).await;
 
     for (url, maybe_feed) in feeds_from_cache.into_iter() {
-        let result = if collection.contains_key(&url) {
+        let result = if let Some(collection_feed) = collection.get_mut(&url) {
             match maybe_feed {
-                Ok(feed) => {
+                Ok(feed_update) => {
                     // Update the user's collection and add it to the results.
                     let entries = FeedEntries::new(
-                        feed.entries
+                        feed_update
+                            .entries
                             .iter()
                             .map(FeedEntry::from_raw_feed_entry)
                             .collect(),
                     );
 
-                    let feed = match collection.get_mut(&url) {
-                        None => {
-                            // This feed is not yet in the user's collection. Add it.
-                            let title = feed.title.map(|text| text.content).unwrap_or_default();
-                            collection.insert(
-                                url.clone(),
-                                RssFeed::new(FeedInfo {
-                                    name: title,
-                                    tags: HashSet::new(),
-                                }),
-                            );
-                            collection.get_mut(&url).unwrap()
-                        }
-                        Some(feed) => feed,
-                    };
-
-                    feed.update_entries(entries);
-                    Ok((feed.info.clone(), feed.entries.clone()))
+                    collection_feed.update_entries(entries);
                 }
-                Err(e) => Err(e.to_string()),
+                Err(e) => {
+                    // Could not retrieve an update of the feed for some reason.
+                    warn!("Could not retrieve feed from `{}`: {}", url, e.to_string());
+                }
             }
+
+            Ok((
+                collection_feed.info.clone(),
+                collection_feed.entries.clone(),
+            ))
         } else {
             warn!(
                 "User `{}` made a request for a feed that is not in their collection: `{}`",
