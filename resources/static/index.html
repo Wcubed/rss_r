@@ -161,8 +161,7 @@
 <script>
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
-            // TODO (Wybe 2022-07-10): Uncomment this line when the app is stable. For testing, the caching causes confusion.
-            //navigator.serviceWorker.register('sw.js');
+            navigator.serviceWorker.register('sw.js');
         });
     }
 

@@ -22,14 +22,10 @@ use actix_web::middleware::Logger;
 use actix_web::rt::{spawn, time};
 use actix_web::{cookie, web, App, HttpServer};
 use actix_web_lab::web::redirect;
-use log::{error, info, warn, LevelFilter};
-use rustls::{Certificate, PrivateKey};
-use rustls_pemfile::{certs, pkcs8_private_keys};
+use log::{info, warn, LevelFilter};
 use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode};
 use std::collections::hash_map::DefaultHasher;
-use std::fs::File;
 use std::hash::{Hash, Hasher};
-use std::io::BufReader;
 use std::time::Duration;
 
 /// TODO (Wybe 2022-07-10): Add configuration options for ip address and port.
@@ -69,9 +65,7 @@ async fn main() -> std::io::Result<()> {
     let rss_collections = RssCollections::load_or_default();
     let web_rss_collections = web::Data::new(rss_collections);
 
-    let rustls_config = load_rustls_config();
-
-    info!("Starting Https server at https://{IP}");
+    info!("Starting Http server at {IP}");
 
     // Spawn the task to periodically save the collections.
     let collections_to_save = web_rss_collections.clone();
@@ -136,7 +130,7 @@ async fn main() -> std::io::Result<()> {
                     .service(rss_collection::set_feed_info),
             )
     })
-    .bind_rustls(IP, rustls_config)?
+    .bind(IP)?
     .run()
     .await?;
 
@@ -144,36 +138,4 @@ async fn main() -> std::io::Result<()> {
     collections_save_on_application_close.save();
 
     Ok(())
-}
-
-fn load_rustls_config() -> rustls::ServerConfig {
-    let config = rustls::ServerConfig::builder()
-        .with_safe_defaults()
-        .with_no_client_auth();
-
-    // load TLS key/cert files
-    // TODO (Wybe 2022-07-10): Allow selecting certification files via a config file or maybe command line parameters.
-    let cert_file = &mut BufReader::new(File::open("resources/local-ssl/localhost.pem").unwrap());
-    let key_file =
-        &mut BufReader::new(File::open("resources/local-ssl/localhost-key.pem").unwrap());
-
-    // convert files to key/cert objects
-    let cert_chain = certs(cert_file)
-        .unwrap()
-        .into_iter()
-        .map(Certificate)
-        .collect();
-    let mut keys: Vec<PrivateKey> = pkcs8_private_keys(key_file)
-        .unwrap()
-        .into_iter()
-        .map(PrivateKey)
-        .collect();
-
-    // exit if no keys could be parsed
-    if keys.is_empty() {
-        error!("Could not locate PKCS 8 private keys.");
-        std::process::exit(1);
-    }
-
-    config.with_single_cert(cert_chain, keys.remove(0)).unwrap()
 }

@@ -1,6 +1,6 @@
 In-development, web-based feed reader built in rust. Despite the name, it can read RSS, ATOM and JSON feeds.
 
-The test certificate in `resources/local-ssl` has been generated with `mkcert localhost localhost`
+Https is not built-in, because the application is supposed to be behind an nginx server.
 
 # Building
 - To build: `cargo make build`.

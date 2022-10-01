@@ -2587,8 +2587,6 @@ dependencies = [
  "reqwest",
  "ron 0.7.1",
  "rss_com_lib",
- "rustls",
- "rustls-pemfile",
  "serde",
  "simplelog",
  "thiserror",
@@ -2658,15 +2656,6 @@ dependencies = [
  "ring",
  "sct",
  "webpki",
-]
-
-[[package]]
-name = "rustls-pemfile"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0864aeff53f8c05aa08d86e5ef839d3dfcf07aeba2db32f12db0ef716e87bd55"
-dependencies = [
- "base64",
 ]
 
 [[package]]
