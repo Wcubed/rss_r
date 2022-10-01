@@ -163,7 +163,8 @@
 <script>
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
-            navigator.serviceWorker.register('sw.js');
+            // TODO (Wybe 2022-10-01): Do we want to cache? During development this is annoying.
+            //navigator.serviceWorker.register('sw.js');
         });
     }
 

@@ -41,6 +41,18 @@ impl RssCollection {
             self.update_feed_entries_based_on_selection(requests);
         }
 
+        if ui.button("Update selected feeds").clicked() {
+            // Request the server to update all the feeds we have selected now,
+            // and return the new entries.
+            requests.new_request_with_json_body(
+                ApiEndpoint::GetFeedEntries,
+                GetFeedEntriesRequest {
+                    feeds: self.get_urls_from_current_selection(),
+                    refresh: true,
+                },
+            )
+        }
+
         match self.feeds_display.show(ui, requests) {
             FeedListDisplayResponse::None => {} // Nothing to do
             FeedListDisplayResponse::FeedInfoEdited(url, new_info) => {
@@ -95,13 +107,11 @@ impl RssCollection {
                     if let Ok(feeds_response) =
                         serde_json::from_str::<GetFeedEntriesResponse>(&body)
                     {
-                        for (url, result) in feeds_response.results {
-                            if let Ok((info, entries)) = result {
-                                // The server always sends the complete state of the feed,
-                                // so we don't have to worry about checking if the feed is already
-                                // in the map. We can simply overwrite if if it exists.
-                                self.feeds.insert(url, (info, Some(entries)));
-                            }
+                        for (url, (info, entries)) in feeds_response.results {
+                            // The server always sends the complete state of the feed,
+                            // so we don't have to worry about checking if the feed is already
+                            // in the map. We can simply overwrite if if it exists.
+                            self.feeds.insert(url, (info, Some(entries)));
                         }
 
                         self.update_feed_entries_based_on_selection(requests);
@@ -228,29 +238,36 @@ impl RssCollection {
         }
     }
 
+    /// Checks what the user has selected, and returns all the urls that match the selection.
+    fn get_urls_from_current_selection(&self) -> HashSet<Url> {
+        let mut selected = HashSet::new();
+
+        match self.feeds_display.get_current_selection() {
+            FeedSelection::All => {
+                for url in self.feeds.keys() {
+                    selected.insert(url.clone());
+                }
+            }
+            FeedSelection::Feed(url) => {
+                selected.insert(url);
+            }
+            FeedSelection::Tag(_, urls) => {
+                for url in urls {
+                    selected.insert(url);
+                }
+            }
+        }
+
+        selected
+    }
+
     fn update_feed_entries_based_on_selection(&mut self, requests: &mut Requests) {
         self.selected_feed_entries = Vec::new();
 
         // TODO (Wybe 2022-07-18): Queue request if another request is outgoing.
         // TODO (Wybe 2022-07-18): Change the main display already to whatever we have loaded from our local storage?
         //                          and update the display when the request returns.
-        let mut urls_to_display = HashSet::new();
-        match self.feeds_display.get_current_selection() {
-            FeedSelection::All => {
-                for url in self.feeds.keys() {
-                    urls_to_display.insert(url.clone());
-                }
-            }
-            FeedSelection::Feed(url) => {
-                urls_to_display.insert(url);
-            }
-            FeedSelection::Tag(_, urls) => {
-                for url in urls {
-                    urls_to_display.insert(url);
-                }
-            }
-        }
-
+        let mut urls_to_display = self.get_urls_from_current_selection();
         let mut urls_to_request = HashSet::new();
 
         // Check which feeds we already have the items of,
@@ -286,6 +303,7 @@ impl RssCollection {
                 ApiEndpoint::GetFeedEntries,
                 GetFeedEntriesRequest {
                     feeds: urls_to_request,
+                    refresh: false,
                 },
             )
         }

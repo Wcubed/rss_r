@@ -36,14 +36,18 @@ pub struct ListFeedsResponse {
 pub struct GetFeedEntriesRequest {
     /// Urls of the feeds to retrieve.
     pub feeds: HashSet<Url>,
+    /// Whether the server should first try to check for updates, before sending the feeds to the client.
+    pub refresh: bool,
 }
 
 /// Response for `/api/get_feed_entries`
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GetFeedEntriesResponse {
     /// Hashmap of
-    /// <Feed url -> Either the contents of the feed, or the error message if there is no feed>
-    pub results: HashMap<Url, Result<(FeedInfo, FeedEntries), String>>,
+    /// <Feed url -> Feed>
+    /// If the request contained any urls that are not in the user's collection, they will not
+    /// be listed in the response.
+    pub results: HashMap<Url, (FeedInfo, FeedEntries)>,
 }
 
 /// Request and response for `/api/set_entry_read`

@@ -4,15 +4,15 @@
 mod auth;
 mod auth_middleware;
 mod error;
+mod feed_requester;
 mod persistence;
-mod rss_cache;
 mod rss_collection;
 mod users;
 
 use crate::auth::{AuthData, AUTH_COOKIE_NAME};
 use crate::auth_middleware::{AuthenticateMiddlewareFactory, Authenticated};
+use crate::feed_requester::FeedRequester;
 use crate::persistence::SaveInRonFile;
-use crate::rss_cache::RssCache;
 use crate::rss_collection::RssCollections;
 use crate::users::UserInfo;
 use actix_files::Files;
@@ -20,6 +20,7 @@ use actix_identity::{CookieIdentityPolicy, IdentityService};
 use actix_web::cookie::SameSite;
 use actix_web::middleware::Logger;
 use actix_web::rt::{spawn, time};
+use actix_web::web::Data;
 use actix_web::{cookie, web, App, HttpServer};
 use actix_web_lab::web::redirect;
 use log::{info, warn, LevelFilter};
@@ -28,15 +29,20 @@ use simplelog::{
     WriteLogger,
 };
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashSet;
 use std::fs::{create_dir_all, OpenOptions};
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
 
 /// TODO (Wybe 2022-07-10): Add configuration options for ip address and port.
 const IP: &str = "0.0.0.0:8443";
-const LOGIN_DEADLINE: cookie::time::Duration = cookie::time::Duration::days(3);
+const LOGIN_DEADLINE: cookie::time::Duration = cookie::time::Duration::days(7);
+
 /// How often the feed collections will be saved, if they have changed in the meantime.
 const COLLECTIONS_SAVE_INTERVAL: Duration = Duration::from_secs(120);
+
+/// How often we will update all of the user's feed collections in the background.
+const FEED_UPDATE_INTERVAL: Duration = Duration::from_secs(3600 * 12);
 
 /// TODO (Wybe 2022-07-10): Add some small banner that says this site uses cookies to authenticate? or is it not needed for authentication cookies.
 /// TODO (Wybe 2022-07-12): Rss apparently sometimes allows getting push notifications, via a "Cloud" element in the feed. Is it worth it to implement this?
@@ -62,30 +68,10 @@ async fn main() -> std::io::Result<()> {
 
     info!("Starting Http server at {IP}");
 
-    // Spawn the task to periodically save the collections.
-    let collections_to_save = web_rss_collections.clone();
+    spawn_periodic_saving_task(web_rss_collections.clone(), COLLECTIONS_SAVE_INTERVAL);
+    spawn_periodic_feed_update_task(web_rss_collections.clone(), FEED_UPDATE_INTERVAL);
+
     let collections_save_on_application_close = web_rss_collections.clone();
-    spawn(async move {
-        let mut save_interval = time::interval(COLLECTIONS_SAVE_INTERVAL);
-
-        let mut hasher = DefaultHasher::new();
-        collections_to_save.hash(&mut hasher);
-        let mut last_save_hash = hasher.finish();
-
-        loop {
-            save_interval.tick().await;
-
-            let mut hasher = DefaultHasher::new();
-            collections_to_save.hash(&mut hasher);
-            let new_hash = hasher.finish();
-
-            if new_hash != last_save_hash {
-                // Collections have changed. Save them.
-                collections_to_save.save();
-                last_save_hash = new_hash;
-            }
-        }
-    });
 
     HttpServer::new(move || {
         // TODO (Wybe 2022-07-11): Add an actual key?
@@ -111,7 +97,7 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/api")
                     .app_data(web_auth_data.clone())
                     .app_data(web_rss_collections.clone())
-                    .app_data(web::Data::new(RssCache::default()))
+                    .app_data(Data::new(FeedRequester::default()))
                     .wrap(AuthenticateMiddlewareFactory)
                     .wrap(IdentityService::new(identity_policy))
                     .service(auth::test_auth_cookie)
@@ -133,6 +119,82 @@ async fn main() -> std::io::Result<()> {
     collections_save_on_application_close.save();
 
     Ok(())
+}
+
+fn spawn_periodic_saving_task(collections: Data<RssCollections>, interval: Duration) {
+    spawn(async move {
+        let mut save_interval = time::interval(interval);
+
+        let mut hasher = DefaultHasher::new();
+        collections.hash(&mut hasher);
+        let mut last_save_hash = hasher.finish();
+
+        loop {
+            save_interval.tick().await;
+
+            let mut hasher = DefaultHasher::new();
+            collections.hash(&mut hasher);
+            let new_hash = hasher.finish();
+
+            if new_hash != last_save_hash {
+                // Collections have changed. Save them.
+                collections.save();
+                last_save_hash = new_hash;
+            }
+        }
+    });
+}
+
+/// Will periodically update the feeds.
+/// Will do the first update when this funcion is called.
+fn spawn_periodic_feed_update_task(collections: Data<RssCollections>, interval: Duration) {
+    spawn(async move {
+        let mut update_interval = time::interval(interval);
+        let feed_requester = FeedRequester::default();
+        // The timeout for background updates can be a lot higher than when a user is waiting.
+        let timeout = Duration::from_secs(20);
+
+        loop {
+            // The first time we get here, `tick` will immediately pass. This means we update
+            // on the start of the program.
+            update_interval.tick().await;
+
+            update_all_collections(&collections, &feed_requester, timeout).await;
+        }
+    });
+}
+
+async fn update_all_collections(
+    collections: &Data<RssCollections>,
+    requester: &FeedRequester,
+    timeout: Duration,
+) {
+    info!("Updating feeds in the background.");
+
+    let mut feed_urls = HashSet::new();
+    {
+        let collections = collections.read().unwrap();
+
+        for (_, collection) in collections.iter() {
+            feed_urls.extend(collection.keys().cloned())
+        }
+    } // Lock on `RssCollections` is dropped here, so that it isn't held while the http requests are made (which can take quite a while).
+
+    let feed_requests = requester.request_feeds(&feed_urls, timeout).await;
+
+    {
+        let mut collections = collections.write().unwrap();
+
+        for (_, collection) in collections.iter_mut() {
+            for (url, feed) in collection.iter_mut() {
+                if let Some(Ok(update_feed)) = feed_requests.get(url) {
+                    feed.update_entries(update_feed.entries.clone());
+                }
+            }
+        }
+    }
+
+    info!("Done updating feeds in the background.")
 }
 
 fn configure_logging() {

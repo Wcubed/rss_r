@@ -1,18 +1,21 @@
 use crate::users::UserId;
-use crate::{Authenticated, RssCache, SaveInRonFile};
+use crate::{Authenticated, FeedRequester, SaveInRonFile};
 use actix_web::{post, web, HttpResponse, Responder};
-use log::{info, warn};
+use log::info;
 use rss_com_lib::message_body::{
     AddFeedRequest, GetFeedEntriesRequest, GetFeedEntriesResponse, IsUrlAnRssFeedRequest,
     IsUrlAnRssFeedResponse, ListFeedsResponse, SetEntryReadRequestAndResponse,
     SetFeedInfoRequestAndResponse,
 };
-use rss_com_lib::rss_feed::{FeedEntries, FeedEntry, FeedInfo};
+use rss_com_lib::rss_feed::{FeedEntries, FeedInfo};
 use rss_com_lib::Url;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::RwLock;
+use std::time::Duration;
+
+const NEW_FEED_REQUEST_TIMEOUT: Duration = core::time::Duration::from_secs(10);
 
 #[derive(Default, Serialize, Deserialize, Debug)]
 pub struct RssCollections(RwLock<HashMap<UserId, RssCollection>>);
@@ -86,11 +89,8 @@ pub struct RssFeed {
 }
 
 impl RssFeed {
-    pub fn new(info: FeedInfo) -> Self {
-        RssFeed {
-            info,
-            entries: FeedEntries::default(),
-        }
+    pub fn new(info: FeedInfo, entries: FeedEntries) -> Self {
+        RssFeed { info, entries }
     }
 
     /// Checks if any of the given entries are new, and updates the feed with them.
@@ -128,16 +128,43 @@ pub async fn get_feed_entries(
     request: web::Json<GetFeedEntriesRequest>,
     auth: Authenticated,
     collections: web::Data<RssCollections>,
-    cache: web::Data<RssCache>,
+    requester: web::Data<FeedRequester>,
 ) -> impl Responder {
     let result = {
-        let mut collections = collections.write().unwrap();
+        if request.refresh {
+            let mut collections = collections.write().unwrap();
 
-        // TODO (Wybe 2022-07-18): Do this in a way that does not block on `collections` while the potential request
-        //      for a feed update is being awaited.
-        if let Some(collection) = collections.get_mut(auth.user_id()) {
-            let results_map =
-                get_feeds_from_cache_or_update(auth, collection, cache, &request.feeds).await;
+            info!(
+                "User requested refresh of feeds. Downloading {} feeds.",
+                request.feeds.len()
+            );
+
+            // Update the listed feeds.
+            if let Some(collection) = collections.get_mut(auth.user_id()) {
+                let update_timeout = core::time::Duration::from_secs(5);
+                let feeds = requester
+                    .request_feeds(&request.feeds, update_timeout)
+                    .await;
+
+                for (url, maybe_feed) in feeds {
+                    if let (Some(feed), Ok(update_feed)) = (collection.get_mut(&url), maybe_feed) {
+                        feed.update_entries(update_feed.entries);
+                    }
+                }
+            }
+        }
+
+        let collections = collections.read().unwrap();
+
+        if let Some(collection) = collections.get(auth.user_id()) {
+            // TODO (Wybe 2022-10-01): Implement the "refresh" option on the request.
+            let mut results_map = HashMap::new();
+
+            for url in &request.feeds {
+                if let Some(feed) = collection.get(url) {
+                    results_map.insert(url.clone(), (feed.info.clone(), feed.entries.clone()));
+                }
+            }
 
             if results_map.is_empty() {
                 // An empty map means the user requested only feeds that they don't have in the collection.
@@ -155,70 +182,14 @@ pub async fn get_feed_entries(
     result
 }
 
-/// Returns requested feeds, keyed by their url, or an error message
-/// if that feed doesn't exist.
-/// Makes any needed requests to each feed's original url.
-/// TODO (Wybe 2022-07-19): Don't block on collection?
-/// TODO (Wybe 2022-07-19): Rename this
-async fn get_feeds_from_cache_or_update(
-    auth: Authenticated,
-    collection: &mut RssCollection,
-    cache: web::Data<RssCache>,
-    requests: &HashSet<Url>,
-) -> HashMap<Url, Result<(FeedInfo, FeedEntries), String>> {
-    let mut results = HashMap::new();
-
-    let feeds_from_cache = cache.get_feeds(requests).await;
-
-    for (url, maybe_feed) in feeds_from_cache.into_iter() {
-        let result = if let Some(collection_feed) = collection.get_mut(&url) {
-            match maybe_feed {
-                Ok(feed_update) => {
-                    // Update the user's collection and add it to the results.
-                    let entries = FeedEntries::new(
-                        feed_update
-                            .entries
-                            .iter()
-                            .map(FeedEntry::from_raw_feed_entry)
-                            .collect(),
-                    );
-
-                    collection_feed.update_entries(entries);
-                }
-                Err(e) => {
-                    // Could not retrieve an update of the feed for some reason.
-                    warn!("Could not retrieve feed from `{}`: {}", url, e.to_string());
-                }
-            }
-
-            Ok((
-                collection_feed.info.clone(),
-                collection_feed.entries.clone(),
-            ))
-        } else {
-            warn!(
-                "User `{}` made a request for a feed that is not in their collection: `{}`",
-                auth.user_name(),
-                url
-            );
-            Err("Feed is not in the collection".to_string())
-        };
-
-        results.insert(url.clone(), result);
-    }
-
-    results
-}
-
 /// Adds the given rss feed to the feed collection of the user.
 /// TODO (Wybe 2022-07-16): Sanitize url?
-/// TODO (Wybe 2022-07-16): Check if the feed actually exists.
-/// TODO (Wybe 2022-07-16): Cache feed, so we can immediately serve it after it has been added.
 #[post("/add_feed")]
 pub async fn add_feed(
     request: web::Json<AddFeedRequest>,
     auth: Authenticated,
     collections: web::Data<RssCollections>,
+    requester: web::Data<FeedRequester>,
 ) -> impl Responder {
     info!(
         "Adding feed for user `{}`: `{}`",
@@ -237,7 +208,17 @@ pub async fn add_feed(
 
         if !collection.contains_key(&request.url) {
             // This feed is new for the user.
-            collection.insert(request.url.clone(), RssFeed::new(request.info.clone()));
+            if let (_, Ok(new_feed)) = requester
+                .request_feed(&request.url, NEW_FEED_REQUEST_TIMEOUT)
+                .await
+            {
+                collection.insert(
+                    request.url.clone(),
+                    RssFeed::new(request.info.clone(), new_feed.entries),
+                );
+            } else {
+                // TODO (Wybe 2022-10-01): Return an error.
+            }
         } else {
             info!(
                 "User `{}` already had feed `{}` in their collection",
@@ -259,7 +240,7 @@ pub async fn add_feed(
 pub async fn is_url_an_rss_feed(
     request: web::Json<IsUrlAnRssFeedRequest>,
     auth: Authenticated,
-    cache: web::Data<RssCache>,
+    requester: web::Data<FeedRequester>,
 ) -> impl Responder {
     info!(
         "User `{}` tests url `{}` for existence of an rss feed",
@@ -267,9 +248,11 @@ pub async fn is_url_an_rss_feed(
         request.url,
     );
 
-    let (_, maybe_feed) = cache.get_feed(&request.url).await;
+    let (_, maybe_feed) = requester
+        .request_feed(&request.url, NEW_FEED_REQUEST_TIMEOUT)
+        .await;
     let result = match maybe_feed {
-        Ok(feed) => Ok(feed.title.map(|text| text.content).unwrap_or_default()),
+        Ok(feed) => Ok(feed.title),
         Err(err) => Err(err.to_string()),
     };
 
@@ -374,10 +357,13 @@ mod tests {
     #[test]
     fn test_updating_feed_leaves_existing_entries_intact() {
         // Given
-        let mut feed = RssFeed::new(FeedInfo {
-            name: "Test".to_string(),
-            tags: Default::default(),
-        });
+        let mut feed = RssFeed::new(
+            FeedInfo {
+                name: "Test".to_string(),
+                tags: Default::default(),
+            },
+            Default::default(),
+        );
 
         let entry_1 = FeedEntry {
             title: "Title".to_string(),
