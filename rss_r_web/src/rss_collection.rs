@@ -160,7 +160,7 @@ impl RssCollection {
                                 ui.checkbox(
                                     &mut mark_read,
                                     highlighted_text(
-                                        &disp.entry.title,
+                                        &disp.display_title,
                                         unread,
                                         unread_entry_text_color,
                                     ),
@@ -268,7 +268,7 @@ impl RssCollection {
                         self.selected_feed_entries.push(DisplayFeedEntry::new(
                             entry,
                             key,
-                            feed_info.name.clone(),
+                            &feed_info.name,
                             url.clone(),
                         ));
                     }
@@ -303,6 +303,8 @@ fn highlighted_text(text: &str, highlight: bool, highlight_color: Color32) -> Ri
 /// The info used to display an entry, so that it doesn't need to be recalculated each frame.
 struct DisplayFeedEntry {
     entry: FeedEntry,
+    /// The feed title, but formatted for display.
+    display_title: String,
     /// Key to use when sending update requests to the server, such as marking the entry as read.
     key: EntryKey,
     /// Title of the feed this entry belongs to.
@@ -313,9 +315,13 @@ struct DisplayFeedEntry {
 }
 
 impl DisplayFeedEntry {
-    fn new(entry: &FeedEntry, key: &EntryKey, feed_title: String, feed_url: Url) -> Self {
+    fn new(entry: &FeedEntry, key: &EntryKey, feed_title: &str, feed_url: Url) -> Self {
+        let display_title = cut_middle_of_string_if_too_long(&entry.title, 60);
+        let feed_title = cut_middle_of_string_if_too_long(feed_title, 40);
+
         DisplayFeedEntry {
             entry: entry.clone(),
+            display_title,
             key: key.clone(),
             feed_title,
             feed_url,
@@ -346,6 +352,45 @@ impl PartialOrd for DisplayFeedEntry {
 impl Ord for DisplayFeedEntry {
     fn cmp(&self, other: &Self) -> Ordering {
         self.entry.cmp(&other.entry)
+    }
+}
+
+/// Cuts out the middle of strings if they are too long.
+pub fn cut_middle_of_string_if_too_long(input: &str, max_length: usize) -> String {
+    let infix = "....";
+    let infix_length = 4;
+
+    let string_length = input.chars().count();
+
+    if string_length > max_length {
+        // String is too long. Snip it, and add the infix.
+        // We show the first few, and last few characters, because the last few usually include
+        // a chapter number. Which is important to show to the user.
+
+        let mut result = String::with_capacity(max_length);
+        let mut start_length = (max_length / 2) - (infix_length / 2);
+        let end_length = start_length;
+
+        if max_length % 2 == 1 {
+            // Odd length. The odd char goes to the first section.
+            start_length += 1;
+        }
+
+        for (i, c) in input.char_indices() {
+            if i < start_length {
+                result.push(c);
+            }
+            if i == start_length {
+                result.push_str(infix);
+            }
+            if i >= string_length - end_length {
+                result.push(c);
+            }
+        }
+
+        result
+    } else {
+        input.to_string()
     }
 }
 
@@ -426,7 +471,6 @@ impl FeedListDisplay {
         self.selection.clone()
     }
 
-    /// Returns a list of all the selected feeds if the selection changed.
     fn show(&mut self, ui: &mut Ui, requests: &mut Requests) -> FeedListDisplayResponse {
         let mut response = FeedListDisplayResponse::None;
 
@@ -580,4 +624,25 @@ impl Default for FeedSelection {
 /// A selectable value that will return true if it has been selected by the user.
 fn selectable_value(ui: &mut Ui, mut selected: bool, text: &str) -> bool {
     ui.toggle_value(&mut selected, text).clicked()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::rss_collection::cut_middle_of_string_if_too_long;
+    use pretty_assertions::assert_eq;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case("This is a very long string", 12, "This....ring")]
+    #[case("Uncut string", 40, "Uncut string")]
+    #[case("1234567890", 8, "12....90")]
+    #[case("An odd string length", 7, "An....h")]
+    fn test_cut_middle_of_string_if_too_long(
+        #[case] input: &str,
+        #[case] max_length: usize,
+        #[case] expected: &str,
+    ) {
+        let result = cut_middle_of_string_if_too_long(input, max_length);
+        assert_eq!(&result, expected);
+    }
 }

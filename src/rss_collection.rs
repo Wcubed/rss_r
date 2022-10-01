@@ -381,7 +381,7 @@ mod tests {
 
         let entry_1 = FeedEntry {
             title: "Title".to_string(),
-            link: Some(Url::new("a link".to_string())),
+            link: Some(Url::new("same link".to_string())),
             pub_date: Default::default(),
             read: false,
         };
@@ -391,7 +391,7 @@ mod tests {
 
         let entry_2 = FeedEntry {
             title: "Title".to_string(),
-            link: Some(Url::new("another_link".to_string())),
+            link: Some(Url::new("same link".to_string())),
             pub_date: Default::default(),
             read: true,
         };

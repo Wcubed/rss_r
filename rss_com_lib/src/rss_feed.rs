@@ -222,11 +222,8 @@ mod tests {
 
         // Then
         assert_eq!(
-            key,
-            EntryKey([
-                175, 242, 19, 86, 102, 187, 89, 25, 187, 21, 254, 107, 18, 185, 250, 130, 34, 30,
-                74, 67, 249, 139, 4, 71, 134, 86, 111, 146, 201, 10, 235, 81
-            ])
+            format!("{:?}", key),
+            "EntryKey(+vjG8EtOdpGWNayLWPbELTE7RcppsbgbTvIlWG/76ls=)".to_string()
         );
     }
 
