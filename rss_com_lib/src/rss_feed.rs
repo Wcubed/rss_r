@@ -78,11 +78,14 @@ impl IntoIterator for FeedEntries {
 pub struct EntryKey([u8; 32]);
 
 impl EntryKey {
-    /// The key is based on the title and date of the entry.
+    /// The key is based on the title and link of the entry.
     pub fn from_entry(entry: &FeedEntry) -> Self {
         let mut hasher = blake3::Hasher::new();
         hasher.update(entry.title.as_bytes());
-        hasher.update(&entry.pub_date.timestamp().to_be_bytes());
+
+        if let Some(link) = &entry.link {
+            hasher.update(link.as_bytes());
+        }
 
         EntryKey(hasher.finalize().into())
     }

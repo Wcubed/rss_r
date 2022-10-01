@@ -21,6 +21,10 @@ impl Url {
     pub fn clone_string(&self) -> String {
         self.0.clone()
     }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
 }
 
 impl Display for Url {
