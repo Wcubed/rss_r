@@ -3,9 +3,14 @@ In-development, web-based feed reader built in rust. Despite the name, it can re
 Https is not built-in, because the application is supposed to be behind an nginx server.
 
 # Building
-- To build: `cargo make build`.
-- To build + run: `cargo make run`, then go to [https://localhost:8443/](https://localhost:8443/) in a web browser.
+- To build: `cargo make build` or `cargo make build --release`.
+- To build + run: `cargo make run` or `cargo make run --release`, then go to [https://localhost:8443/](https://localhost:8443/) in a web browser.
 
+# Deploy to raspberry pi
+- Install `podman` or `docker` (if you use `docker` you need to have the daemon running before continuing).
+- Run `cargo make release-rpi`.
+- Copy the executable from `target/armv7-unknown-linux-gnueabihf/release/rss_r`, and the `resources` directory to the target.
+- Run `rss_r`.
 
 TODO (Wybe 2022-09-27): For deployment on my raspberry pi, build everything in --release mode. How do I add that option neatly to the Makefile.toml? are there examples for that?
 TODO (Wybe 2022-09-27): For deployment on the raspberry pi think about the following

@@ -23,6 +23,11 @@ serde = { version = "1", features = ["derive"] }
 chrono = "0.4"
 # Needed for simplelog's time settings.
 time = "0.3.1"
+# We specifically specify the `openssl` crate, even though we don't depend on it directly,
+# because we need to enable the `vendored` feature to make cross compilation to the raspberry pi work.
+# See https://github.com/messense/rust-musl-cross/issues/44
+# and https://stackoverflow.com/questions/68871193/pkg-config-error-during-rust-cross-compilation
+openssl = { version = "0.10.42", features = ["vendored"] }
 
 [dev-dependencies]
 pretty_assertions = "1.3.0"

@@ -1,5 +1,7 @@
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+# Raspberry 2/3/4
+RASPI_TARGET_TRIPLE = "armv7-unknown-linux-gnueabihf"
 
 [tasks.format]
 install_crate = "rustfmt"
@@ -8,7 +10,7 @@ args = ["fmt", "--", "--emit=files"]
 
 [tasks.build]
 command = "cargo"
-args = ["build"]
+args = ["build", "${@}"]
 dependencies = ["format"]
 
 [tasks.test]
@@ -18,5 +20,17 @@ dependencies = ["build"]
 
 [tasks.run]
 command = "cargo"
-args = ["run"]
+args = ["run", "${@}"]
 dependencies = ["build"]
+
+[tasks.install-cross]
+# Needed for cross-compiling to the raspberry pi.
+install_crate = { crate_name = "cross" }
+args = ["--git", "https://github.com/cross-rs/cross"]
+
+[tasks.rpi-release]
+# Build a release for the raspberry pi.
+command = "cross"
+args = ["build", "--release", "--target", "${RASPI_TARGET_TRIPLE}",]
+dependencies = ["install-cross"]
+# TODO (Wybe 2022-10-01): Automatically package the build along with the `resources` directory into a zip?
