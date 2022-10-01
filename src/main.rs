@@ -23,8 +23,12 @@ use actix_web::rt::{spawn, time};
 use actix_web::{cookie, web, App, HttpServer};
 use actix_web_lab::web::redirect;
 use log::{info, warn, LevelFilter};
-use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode};
+use simplelog::{
+    format_description, ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode,
+    WriteLogger,
+};
 use std::collections::hash_map::DefaultHasher;
+use std::fs::{create_dir_all, OpenOptions};
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
 
@@ -38,19 +42,10 @@ const COLLECTIONS_SAVE_INTERVAL: Duration = Duration::from_secs(120);
 /// TODO (Wybe 2022-07-12): Rss apparently sometimes allows getting push notifications, via a "Cloud" element in the feed. Is it worth it to implement this?
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    configure_logging();
+
     // TODO (Wybe 2022-07-10): Add application arguments or a config file that allows logging to
     //                         a file.
-    TermLogger::init(
-        // TODO (Wybe 2022-07-16): Allow changing this through command line arguments
-        LevelFilter::Info,
-        ConfigBuilder::default()
-            .set_thread_level(LevelFilter::Trace)
-            .set_target_level(LevelFilter::Trace)
-            .build(),
-        TerminalMode::Mixed,
-        ColorChoice::Auto,
-    )
-    .unwrap();
 
     let auth_data = AuthData::load_or_default();
     auth_data.save();
@@ -138,4 +133,43 @@ async fn main() -> std::io::Result<()> {
     collections_save_on_application_close.save();
 
     Ok(())
+}
+
+fn configure_logging() {
+    let log_dir = "log";
+
+    // The logged time is by default in UTC.
+    let config = ConfigBuilder::default()
+        .set_time_format_custom(format_description!(
+            "[year]-[month]-[day] [hour]:[minute]:[second]"
+        ))
+        .set_thread_level(LevelFilter::Trace)
+        .set_target_level(LevelFilter::Trace)
+        .build();
+
+    let term_logger = TermLogger::new(
+        // TODO (Wybe 2022-07-16): Allow changing this through command line arguments
+        LevelFilter::Info,
+        config.clone(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    );
+
+    create_dir_all(&log_dir)
+        .unwrap_or_else(|_| panic!("Could not create all directories for `{}`", &log_dir));
+
+    let date = chrono::offset::Local::today();
+    let file_name = format!("{}/rss_r_{}.log", log_dir, date.format("%Y-%m-%d"));
+
+    // We open the log file in append mode, so we don't overwrite any logs might already be there.
+    let log_file = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(&file_name)
+        .unwrap_or_else(|_| panic!("Could not open `{}` for writing", file_name));
+
+    let file_logger = WriteLogger::new(LevelFilter::Info, config, log_file);
+
+    // We log both to the terminal, and to a file.
+    CombinedLogger::init(vec![term_logger, file_logger]).unwrap();
 }
