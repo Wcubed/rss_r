@@ -451,18 +451,25 @@ impl FeedListDisplay {
                     };
 
                     ui.horizontal(|ui| {
-                        if selectable_value(ui, selected, &info.name) {
-                            self.selection = FeedSelection::Feed(url.clone());
-                            response = FeedListDisplayResponse::SelectionChanged;
-                        }
+                        ui.label("-");
+                        ui.horizontal_wrapped(|ui| {
+                            if selectable_value(ui, selected, &info.name) {
+                                self.selection = FeedSelection::Feed(url.clone());
+                                response = FeedListDisplayResponse::SelectionChanged;
+                            }
 
-                        if ui.button("Edit").clicked() && self.edit_feed_popup.is_none() {
-                            self.edit_feed_popup = Some(EditFeedPopup::new(
-                                url.clone(),
-                                info.clone(),
-                                self.known_tags.clone(),
-                            ));
-                        }
+                            // Only show the edit buton if the feed is selected.
+                            if selected
+                                && ui.button("Edit").clicked()
+                                && self.edit_feed_popup.is_none()
+                            {
+                                self.edit_feed_popup = Some(EditFeedPopup::new(
+                                    url.clone(),
+                                    info.clone(),
+                                    self.known_tags.clone(),
+                                ));
+                            }
+                        });
                     });
                 }
             });
@@ -491,18 +498,25 @@ impl FeedListDisplay {
                     };
 
                     ui.horizontal(|ui| {
-                        if selectable_value(ui, selected, &info.name) {
-                            self.selection = FeedSelection::Feed(url.clone());
-                            response = FeedListDisplayResponse::SelectionChanged;
-                        }
+                        ui.label("-");
+                        ui.horizontal_wrapped(|ui| {
+                            if selectable_value(ui, selected, &info.name) {
+                                self.selection = FeedSelection::Feed(url.clone());
+                                response = FeedListDisplayResponse::SelectionChanged;
+                            }
 
-                        if ui.button("Edit").clicked() && self.edit_feed_popup.is_none() {
-                            self.edit_feed_popup = Some(EditFeedPopup::new(
-                                url.clone(),
-                                info.clone(),
-                                self.known_tags.clone(),
-                            ));
-                        }
+                            // Only show the edit buton if the feed is selected.
+                            if selected
+                                && ui.button("Edit").clicked()
+                                && self.edit_feed_popup.is_none()
+                            {
+                                self.edit_feed_popup = Some(EditFeedPopup::new(
+                                    url.clone(),
+                                    info.clone(),
+                                    self.known_tags.clone(),
+                                ));
+                            }
+                        });
                     });
                 }
             });
