@@ -21,7 +21,12 @@ pub trait SaveInRonFile: Sized + Default + Serialize + DeserializeOwned {
         info!("Saving {}", Self::FILE_NAME);
 
         let mut path = PathBuf::from(PERSISTENCE_DIR);
-        fs::create_dir_all(&path);
+        fs::create_dir_all(&path).unwrap_or_else(|_| {
+            panic!(
+                "Could not create persistence directory: `{}`",
+                PERSISTENCE_DIR
+            )
+        });
 
         path.push(Self::FILE_NAME);
 

@@ -4,7 +4,7 @@ use crate::{Authenticated, UserInfo};
 use actix_identity::Identity;
 use actix_web::dev::ServiceRequest;
 use actix_web::{post, web, HttpRequest, HttpResponse, Responder};
-use log::info;
+use log::{info, warn};
 use rss_com_lib::{PASSWORD_HEADER, USER_ID_HEADER};
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
@@ -144,6 +144,10 @@ pub async fn login(
             HttpResponse::Unauthorized().finish()
         }
     } else {
+        warn!(
+            "Attempt to log in without {} and {} headers",
+            USER_ID_HEADER, PASSWORD_HEADER
+        );
         HttpResponse::Unauthorized().finish()
     }
 }

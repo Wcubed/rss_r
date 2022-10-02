@@ -7,8 +7,9 @@ pub mod rss_feed;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
-pub const USER_ID_HEADER: &str = "user_id";
-pub const PASSWORD_HEADER: &str = "user_pass";
+/// Http headers should not have underscores, proxies like nginx ignore them by default.
+pub const USER_ID_HEADER: &str = "userid";
+pub const PASSWORD_HEADER: &str = "userpass";
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Clone, Ord, PartialOrd)]
 pub struct Url(String);

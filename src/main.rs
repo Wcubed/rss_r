@@ -1,6 +1,7 @@
 #![deny(unsafe_code)]
 #![warn(rust_2018_idioms, clippy::all)]
 
+mod app_config;
 mod auth;
 mod auth_middleware;
 mod error;
@@ -9,6 +10,7 @@ mod persistence;
 mod rss_collection;
 mod users;
 
+use crate::app_config::ApplicationConfig;
 use crate::auth::{AuthData, AUTH_COOKIE_NAME};
 use crate::auth_middleware::{AuthenticateMiddlewareFactory, Authenticated};
 use crate::feed_requester::FeedRequester;
@@ -34,8 +36,6 @@ use std::fs::{create_dir_all, OpenOptions};
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
 
-/// TODO (Wybe 2022-07-10): Add configuration options for ip address and port.
-const IP: &str = "0.0.0.0:8443";
 const LOGIN_DEADLINE: cookie::time::Duration = cookie::time::Duration::days(7);
 
 /// How often the feed collections will be saved, if they have changed in the meantime.
@@ -50,8 +50,8 @@ const FEED_UPDATE_INTERVAL: Duration = Duration::from_secs(3600 * 12);
 async fn main() -> std::io::Result<()> {
     configure_logging();
 
-    // TODO (Wybe 2022-07-10): Add application arguments or a config file that allows logging to
-    //                         a file.
+    let app_config = ApplicationConfig::load_or_default();
+    app_config.save();
 
     let auth_data = AuthData::load_or_default();
     auth_data.save();
@@ -66,7 +66,11 @@ async fn main() -> std::io::Result<()> {
     let rss_collections = RssCollections::load_or_default();
     let web_rss_collections = web::Data::new(rss_collections);
 
-    info!("Starting Http server at {IP}");
+    let binding_ip = app_config.binding_ip();
+    info!(
+        "Starting Http server at `{}`, with hostname `{}` and prefix `{}`",
+        binding_ip, app_config.hostname, app_config.route_prefix
+    );
 
     spawn_periodic_saving_task(web_rss_collections.clone(), COLLECTIONS_SAVE_INTERVAL);
     spawn_periodic_feed_update_task(web_rss_collections.clone(), FEED_UPDATE_INTERVAL);
@@ -87,31 +91,33 @@ async fn main() -> std::io::Result<()> {
             // After this time the user has to log in again.
             .login_deadline(LOGIN_DEADLINE);
 
-        App::new()
-            .wrap(Logger::default())
-            .service(redirect("/", "/app/index.html"))
-            .service(redirect("/app/", "/app/index.html"))
-            // This serves the static files of the rss_r_web webassembly application.
-            .service(Files::new("/app", "resources/static"))
-            .service(
-                web::scope("/api")
-                    .app_data(web_auth_data.clone())
-                    .app_data(web_rss_collections.clone())
-                    .app_data(Data::new(FeedRequester::default()))
-                    .wrap(AuthenticateMiddlewareFactory)
-                    .wrap(IdentityService::new(identity_policy))
-                    .service(auth::test_auth_cookie)
-                    .service(auth::login)
-                    .service(auth::logout)
-                    .service(rss_collection::is_url_an_rss_feed)
-                    .service(rss_collection::get_feed_entries)
-                    .service(rss_collection::add_feed)
-                    .service(rss_collection::list_feeds)
-                    .service(rss_collection::set_entry_read)
-                    .service(rss_collection::set_feed_info),
-            )
+        App::new().wrap(Logger::default()).service(
+            web::scope(&app_config.route_prefix)
+                .service(redirect("/", "app/index.html"))
+                .service(redirect("/app/", "index.html"))
+                // This serves the static files of the rss_r_web webassembly application.
+                .service(Files::new("/app", "resources/static"))
+                .service(
+                    web::scope("/api")
+                        .app_data(web_auth_data.clone())
+                        .app_data(web_rss_collections.clone())
+                        .app_data(Data::new(FeedRequester::default()))
+                        .wrap(AuthenticateMiddlewareFactory)
+                        .wrap(IdentityService::new(identity_policy))
+                        .service(auth::test_auth_cookie)
+                        .service(auth::login)
+                        .service(auth::logout)
+                        .service(rss_collection::is_url_an_rss_feed)
+                        .service(rss_collection::get_feed_entries)
+                        .service(rss_collection::add_feed)
+                        .service(rss_collection::list_feeds)
+                        .service(rss_collection::set_entry_read)
+                        .service(rss_collection::set_feed_info),
+                ),
+        )
     })
-    .bind(IP)?
+    .server_hostname(&app_config.hostname)
+    .bind(binding_ip)?
     .run()
     .await?;
 

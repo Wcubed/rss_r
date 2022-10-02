@@ -1,6 +1,4 @@
 use actix_web_lab::__reexports::futures_util::future;
-use chrono::{Duration, Utc};
-use feed_rs::model;
 use reqwest::ClientBuilder;
 use rss_com_lib::rss_feed::{FeedEntries, FeedEntry};
 use rss_com_lib::Url;

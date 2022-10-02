@@ -1,6 +1,10 @@
 In-development, web-based feed reader built in rust. Despite the name, it can read RSS, ATOM and JSON feeds.
 
-Https is not built-in, because the application is supposed to be behind an nginx server.
+Https is not built-in, because the application is supposed to be behind a proxy, like nginx.
+
+# Configuration
+After the first run, there will be an `persistence/app_config.ron` file in the working directory.
+See [app_config.rs](src/app_config.rs) for explanation of the parameters, and the default values.
 
 # Building
 - To build: `cargo make build` or `cargo make build --release`.
@@ -12,7 +16,6 @@ Https is not built-in, because the application is supposed to be behind an nginx
 - Copy the executable from `target/armv7-unknown-linux-gnueabihf/release/rss_r`, and the `resources` directory to the target.
 - Run `rss_r`.
 
-TODO (Wybe 2022-09-27): For deployment on my raspberry pi, build everything in --release mode. How do I add that option neatly to the Makefile.toml? are there examples for that?
 TODO (Wybe 2022-09-27): For deployment on the raspberry pi think about the following
   - [ ] Auto backup the persistence directory every x time. And keep only every week or so. (do this after the daily check of the feeds)
   - [X] Add logging to a file
