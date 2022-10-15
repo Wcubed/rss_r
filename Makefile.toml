@@ -1,7 +1,11 @@
 [env]
-CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 # Raspberry 2/3/4
 RASPI_TARGET_TRIPLE = "armv7-unknown-linux-gnueabihf"
+TARGET_DIR = "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}"
+# TODO (Wybe 2022-10-15): Replace dots with dashes in version number.
+PACKAGE_NAME = "rss_r_raspi_${CARGO_MAKE_CRATE_VERSION}"
+# Directory that will be zipped to create a release package for the raspberry pi.
+PACKAGE_DIR = "${TARGET_DIR}/packages/${PACKAGE_NAME}"
 
 [tasks.format]
 install_crate = "rustfmt"
@@ -28,9 +32,28 @@ dependencies = ["build"]
 install_crate = { crate_name = "cross" }
 args = ["--git", "https://github.com/cross-rs/cross"]
 
-[tasks.rpi-release]
+[tasks.rpi-release-build]
 # Build a release for the raspberry pi.
 command = "cross"
 args = ["build", "--release", "--target", "${RASPI_TARGET_TRIPLE}",]
 dependencies = ["install-cross"]
-# TODO (Wybe 2022-10-01): Automatically package the build along with the `resources` directory into a zip?
+
+[tasks.rpi-release-package]
+# Zip everything needed to run the server on a raspberry pi.
+# This shell is cross-platform, using [shell2batch](https://github.com/sagiegurari/shell2batch)
+script_runner = "@shell"
+script = '''
+rm -rf "${PACKAGE_DIR}"
+mkdir -p "${PACKAGE_DIR}"
+cp resources "${PACKAGE_DIR}" -r
+cp "${TARGET_DIR}/${RASPI_TARGET_TRIPLE}/release/rss_r" "${PACKAGE_DIR}/"
+
+# The zip command works relative to the current location. So we need to cd into the target directory.
+# Otherwise the zip would have a root directory called "target".
+cd "${TARGET_DIR}/packages"
+rm -f "${PACKAGE_NAME}.zip"
+zip -r "${PACKAGE_NAME}.zip" ${PACKAGE_NAME}
+'''
+
+[tasks.rpi-release]
+dependencies = ["rpi-release-build", "rpi-release-package"]
