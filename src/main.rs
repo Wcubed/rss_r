@@ -38,7 +38,7 @@ use std::time::Duration;
 
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const LOGIN_DEADLINE: cookie::time::Duration = cookie::time::Duration::days(7);
+const LOGIN_DEADLINE: cookie::time::Duration = cookie::time::Duration::days(14);
 
 /// How often the feed collections will be saved, if they have changed in the meantime.
 const COLLECTIONS_SAVE_INTERVAL: Duration = Duration::from_secs(120);
