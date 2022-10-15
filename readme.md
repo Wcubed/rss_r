@@ -34,6 +34,9 @@ feat: Added unicorns to the UI.
 - Run `rss_r`.
 
 TODO (Wybe 2022-09-27): For deployment on the raspberry pi think about the following
+  - [ ] Add a way for the frontend and the backend to check if they have the same `rss_com_lib` version. That way they can check if they can reliably communicate.
+  - [ ] Print the backend version on startup.
+  - [ ] Show the frontend version somewhere on the ui.
   - [ ] "Mark all as read" button.
   - [ ] Save the feed entries separately from the feed info for users? And have separate files on disk for each users individual feed info (read/not read) / settings?
     - [ ] And abstract this away from the rest of the application.

@@ -2587,7 +2587,7 @@ dependencies = [
 
 [[package]]
 name = "rss_r"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "actix-files",
  "actix-identity",
@@ -2609,7 +2609,7 @@ dependencies = [
 
 [[package]]
 name = "rss_r_web"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "chrono",
  "console_error_panic_hook",

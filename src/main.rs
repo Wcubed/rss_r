@@ -36,6 +36,8 @@ use std::fs::{create_dir_all, OpenOptions};
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
 
+const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 const LOGIN_DEADLINE: cookie::time::Duration = cookie::time::Duration::days(7);
 
 /// How often the feed collections will be saved, if they have changed in the meantime.
@@ -49,6 +51,8 @@ const FEED_UPDATE_INTERVAL: Duration = Duration::from_secs(3600 * 12);
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     configure_logging();
+
+    info!("Starting {} v{}", PACKAGE_NAME, VERSION);
 
     let app_config = ApplicationConfig::load_or_default();
     app_config.save();

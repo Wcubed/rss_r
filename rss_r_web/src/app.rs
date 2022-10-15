@@ -5,12 +5,15 @@ use eframe::Frame;
 use egui::{Align2, Context, Ui, Vec2, Visuals};
 use log::info;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub struct RssApp {
     // TODO (Wybe 2022-07-11): Store config server side? And retrieve on log-in?
     config: Config,
     requests: Requests,
     login_view: Option<Login>,
     rss_collection: RssCollection,
+    version_string: String,
 }
 
 impl RssApp {
@@ -34,6 +37,7 @@ impl RssApp {
             requests: Requests::new(cc.egui_ctx.clone()),
             login_view: Some(Login::default()),
             rss_collection: RssCollection::new(),
+            version_string: format!("v{}", VERSION),
         }
     }
 }
@@ -68,6 +72,8 @@ impl eframe::App for RssApp {
                 } else if self.login_view.is_none() && ui.button("Log out").clicked() {
                     self.requests.new_request_without_body(ApiEndpoint::Logout)
                 }
+
+                ui.label(&self.version_string);
             });
         });
 
