@@ -98,17 +98,18 @@ dependencies = [
 
 [[package]]
 name = "actix-identity"
-version = "0.4.0"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "171fe3ed055b2dd50c61967911d253d47e76e1d4308acfbf99fc7affe5ec42aa"
+checksum = "1224c9f9593dc27c9077b233ce04adedc1d7febcfc35ee9f53ea3c24df180bec"
 dependencies = [
  "actix-service",
+ "actix-session",
  "actix-utils",
  "actix-web",
- "futures-util",
+ "anyhow",
+ "futures-core",
  "serde",
- "serde_json",
- "time 0.3.14",
+ "tracing",
 ]
 
 [[package]]
@@ -171,6 +172,23 @@ dependencies = [
  "futures-core",
  "paste",
  "pin-project-lite",
+]
+
+[[package]]
+name = "actix-session"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43da8b818ae1f11049a4d218975345fe8e56ce5a5f92c11f972abcff5ff80e87"
+dependencies = [
+ "actix-service",
+ "actix-utils",
+ "actix-web",
+ "anyhow",
+ "async-trait",
+ "derive_more",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -257,9 +275,9 @@ dependencies = [
 
 [[package]]
 name = "actix-web-lab"
-version = "0.16.9"
+version = "0.18.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8e25a9040595caff3abdf449185bcb846bd5da0001d916212bf370e9f146009"
+checksum = "b11277c9258b28bb2189b10c8910b729384d32afc7839d63568e0931d6a5493e"
 dependencies = [
  "actix-files",
  "actix-http",
@@ -268,7 +286,7 @@ dependencies = [
  "actix-utils",
  "actix-web",
  "actix-web-lab-derive",
- "ahash 0.7.6",
+ "ahash 0.8.0",
  "arc-swap",
  "async-trait",
  "bytes",
@@ -281,6 +299,7 @@ dependencies = [
  "generic-array",
  "hmac",
  "http",
+ "itertools",
  "local-channel",
  "mime",
  "once_cell",
@@ -402,6 +421,12 @@ checksum = "819e7219dbd41043ac279b19830f2efc897156490d7fd6ea916720117ee66311"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "anyhow"
+version = "1.0.65"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98161a4e3e2184da77bb14f02184cdd111e83bbbcc9979dfee3c44b9a85f5602"
 
 [[package]]
 name = "arboard"
@@ -1063,7 +1088,7 @@ dependencies = [
  "glutin",
  "js-sys",
  "percent-encoding",
- "ron 0.8.0",
+ "ron",
  "serde",
  "tracing",
  "wasm-bindgen",
@@ -1081,7 +1106,7 @@ dependencies = [
  "ahash 0.8.0",
  "epaint",
  "nohash-hasher",
- "ron 0.8.0",
+ "ron",
  "serde",
  "tracing",
 ]
@@ -1129,6 +1154,12 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
 ]
+
+[[package]]
+name = "either"
+version = "1.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90e5c1c8368803113bf0c9584fc495a58b86dc8a29edbf8fe877d21d9507e797"
 
 [[package]]
 name = "emath"
@@ -1721,6 +1752,15 @@ name = "ipnet"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "879d54834c8c76457ef4293a689b2a8c59b076067ad77b15efafbb05f92a592b"
+
+[[package]]
+name = "itertools"
+version = "0.10.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
+dependencies = [
+ "either",
+]
 
 [[package]]
 name = "itoa"
@@ -2552,17 +2592,6 @@ dependencies = [
 
 [[package]]
 name = "ron"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88073939a61e5b7680558e6be56b419e208420c2adb92be54921fa6b72283f1a"
-dependencies = [
- "base64",
- "bitflags",
- "serde",
-]
-
-[[package]]
-name = "ron"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "300a51053b1cb55c80b7a9fde4120726ddf25ca241a1cbb926626f62fb136bff"
@@ -2591,6 +2620,7 @@ version = "0.0.2"
 dependencies = [
  "actix-files",
  "actix-identity",
+ "actix-session",
  "actix-web",
  "actix-web-lab",
  "chrono",
@@ -2599,7 +2629,7 @@ dependencies = [
  "openssl",
  "pretty_assertions",
  "reqwest",
- "ron 0.7.1",
+ "ron",
  "rss_com_lib",
  "serde",
  "simplelog",

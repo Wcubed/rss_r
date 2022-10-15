@@ -3,13 +3,13 @@ use crate::users::{UserId, UserRequestInfo, Users};
 use crate::{Authenticated, UserInfo};
 use actix_identity::Identity;
 use actix_web::dev::ServiceRequest;
-use actix_web::{post, web, HttpRequest, HttpResponse, Responder};
+use actix_web::{post, web, HttpMessage, HttpRequest, HttpResponse, Responder};
 use log::{info, warn};
 use rss_com_lib::{PASSWORD_HEADER, USER_ID_HEADER};
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
 
-pub const AUTH_COOKIE_NAME: &str = "auth";
+pub const AUTH_COOKIE_NAME: &str = "auth_id";
 
 #[derive(Serialize, Deserialize)]
 pub struct AuthData {
@@ -36,13 +36,14 @@ impl AuthData {
     ///     "yes you are logged in, but no, you don't have rights to view this"
     pub fn authenticate_user_id(
         &self,
-        user_id_string: Option<String>,
+        identity: Identity,
         _request: &ServiceRequest,
     ) -> Option<AuthenticationResult> {
         let users = self.users.read().unwrap();
 
-        if let Some(id) =
-            user_id_string.and_then(|user_id_string| UserId::from_str(&user_id_string))
+        if let Ok(Some(id)) = identity
+            .id()
+            .and_then(|user_id_string| Ok(UserId::from_str(&user_id_string)))
         {
             users.get(&id).map(|info| AuthenticationResult {
                 user: info.get_request_info(id),
@@ -120,11 +121,7 @@ pub async fn test_auth_cookie(auth: Authenticated) -> impl Responder {
 
 /// Validates user id and password, and sets an identity cookie if they are valid.
 #[post("/login")]
-pub async fn login(
-    req: HttpRequest,
-    id: Identity,
-    auth_data: web::Data<AuthData>,
-) -> impl Responder {
+pub async fn login(req: HttpRequest, auth_data: web::Data<AuthData>) -> impl Responder {
     if let (Some(user_name), Some(password)) = (
         req.headers()
             .get(USER_ID_HEADER)
@@ -136,9 +133,13 @@ pub async fn login(
         // TODO (Wybe 2022-07-10): Allow registering and remembering users and such.
         if let Some(user_id) = auth_data.validate_password(user_name, password) {
             info!("Logging in `{}` with password", user_name);
-            // Login valid, set the auth cookie so the user doesn't need to login all the time.
-            // TODO (Wybe 2022-07-11): Generate and remember the session id somewhere.
-            id.remember(user_id.0.to_string());
+            // Login valid. Remember in the session that the user logged in.
+            if let Err(error) = Identity::login(&req.extensions(), user_id.0.to_string().into()) {
+                warn!(
+                    "Something went wrong while trying to log in user `{}`: {}",
+                    user_name, error
+                )
+            }
             HttpResponse::Ok().finish()
         } else {
             HttpResponse::Unauthorized().finish()
@@ -157,6 +158,6 @@ pub async fn login(
 pub async fn logout(id: Identity, auth: Authenticated) -> impl Responder {
     info!("Logging out `{}`", auth.user_name());
 
-    id.forget();
+    id.logout();
     HttpResponse::Ok().finish()
 }

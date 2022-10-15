@@ -13,13 +13,16 @@ mod users;
 use crate::app_config::ApplicationConfig;
 use crate::auth::{AuthData, AUTH_COOKIE_NAME};
 use crate::auth_middleware::{AuthenticateMiddlewareFactory, Authenticated};
+use crate::cookie::{Cookie, SameSite};
 use crate::feed_requester::FeedRequester;
 use crate::persistence::SaveInRonFile;
 use crate::rss_collection::RssCollections;
 use crate::users::UserInfo;
 use actix_files::Files;
-use actix_identity::{CookieIdentityPolicy, IdentityService};
-use actix_web::cookie::SameSite;
+use actix_identity::IdentityMiddleware;
+use actix_session::config::CookieContentSecurity;
+use actix_session::storage::CookieSessionStore;
+use actix_session::SessionMiddleware;
 use actix_web::middleware::Logger;
 use actix_web::rt::{spawn, time};
 use actix_web::web::Data;
@@ -38,7 +41,7 @@ use std::time::Duration;
 
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const LOGIN_DEADLINE: cookie::time::Duration = cookie::time::Duration::days(14);
+const LOGIN_DEADLINE: Duration = Duration::from_secs(3600 * 24 * 14);
 
 /// How often the feed collections will be saved, if they have changed in the meantime.
 const COLLECTIONS_SAVE_INTERVAL: Duration = Duration::from_secs(120);
@@ -56,6 +59,7 @@ async fn main() -> std::io::Result<()> {
 
     let app_config = ApplicationConfig::load_or_default();
     app_config.save();
+    let auth_master_key = cookie::Key::derive_from(app_config.session_key.as_slice());
 
     let auth_data = AuthData::load_or_default();
     auth_data.save();
@@ -82,18 +86,18 @@ async fn main() -> std::io::Result<()> {
     let collections_save_on_application_close = web_rss_collections.clone();
 
     HttpServer::new(move || {
-        // TODO (Wybe 2022-07-11): Add an actual key?
-        let identity_policy = CookieIdentityPolicy::new(&[0; 32])
-            .name(AUTH_COOKIE_NAME)
-            // Only transmit the cookie over secure connections.
-            .secure(true)
-            // Javascript is not allowed to see this cookie.
-            .http_only(true)
-            // No cross-site sending.
-            .same_site(SameSite::Strict)
-            // This is the maximum time that a login cookie is valid.
-            // After this time the user has to log in again.
-            .login_deadline(LOGIN_DEADLINE);
+        let identity_middleware = IdentityMiddleware::builder()
+            .login_deadline(Some(LOGIN_DEADLINE))
+            .build();
+
+        let session_middleware =
+            SessionMiddleware::builder(CookieSessionStore::default(), auth_master_key.clone())
+                .cookie_content_security(CookieContentSecurity::Private)
+                .cookie_same_site(SameSite::Strict)
+                .cookie_http_only(true)
+                .cookie_secure(true)
+                .cookie_name(AUTH_COOKIE_NAME.to_string())
+                .build();
 
         App::new().wrap(Logger::default()).service(
             web::scope(&app_config.route_prefix)
@@ -107,7 +111,9 @@ async fn main() -> std::io::Result<()> {
                         .app_data(web_rss_collections.clone())
                         .app_data(Data::new(FeedRequester::default()))
                         .wrap(AuthenticateMiddlewareFactory)
-                        .wrap(IdentityService::new(identity_policy))
+                        .wrap(identity_middleware)
+                        // Session middleware has to be added _after_ identity middleware.
+                        .wrap(session_middleware)
                         .service(auth::test_auth_cookie)
                         .service(auth::login)
                         .service(auth::logout)

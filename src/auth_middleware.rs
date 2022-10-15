@@ -4,7 +4,7 @@
 
 use crate::auth::{AuthData, AuthenticationResult};
 use crate::error::Error;
-use actix_identity::RequestIdentity;
+use actix_identity::IdentityExt;
 use actix_web::dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::{web, FromRequest, HttpMessage};
 use actix_web_lab::__reexports::futures_util::future::LocalBoxFuture;
@@ -66,15 +66,17 @@ where
         // Clone the Rc pointers so we can move them into the async block.
         let srv = self.service.clone();
         if let Some(auth_data) = req.app_data::<web::Data<AuthData>>() {
-            // Get the session cookie value, if it exists.
-            let id = req.get_identity();
-            // See if we can match it to a user.
-            let auth = auth_data.authenticate_user_id(id, &req);
-            if let Some(auth) = auth {
-                // If we found a user, add it to the request extensions
-                // for later retrieval.
-                req.extensions_mut()
-                    .insert::<AuthenticationInfo>(Rc::new(auth));
+            // Get the session identity, if it exists.
+            if let Ok(identity) = req.get_identity() {
+                // See if we can match it to a user.
+                let auth = auth_data.authenticate_user_id(identity, &req);
+
+                if let Some(auth) = auth {
+                    // If we found a user, add it to the request extensions
+                    // for later retrieval.
+                    req.extensions_mut()
+                        .insert::<AuthenticationInfo>(Rc::new(auth));
+                }
             }
 
             async move {
