@@ -5,7 +5,7 @@ TARGET_DIR = "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}"
 # TODO (Wybe 2022-10-15): Replace dots with dashes in version number.
 PACKAGE_NAME = "rss_r_raspi_${CARGO_MAKE_CRATE_VERSION}"
 # Directory that will be zipped to create a release package for the raspberry pi.
-PACKAGE_DIR = "${TARGET_DIR}/packages/${PACKAGE_NAME}"
+PACKAGE_DIR = "${TARGET_DIR}/packages/rss_r"
 
 [tasks.format]
 install_crate = "rustfmt"
@@ -52,7 +52,7 @@ cp "${TARGET_DIR}/${RASPI_TARGET_TRIPLE}/release/rss_r" "${PACKAGE_DIR}/"
 # Otherwise the zip would have a root directory called "target".
 cd "${TARGET_DIR}/packages"
 rm -f "${PACKAGE_NAME}.zip"
-zip -r "${PACKAGE_NAME}.zip" ${PACKAGE_NAME}
+zip -r "${PACKAGE_NAME}.zip" rss_r
 '''
 
 [tasks.rpi-release]
