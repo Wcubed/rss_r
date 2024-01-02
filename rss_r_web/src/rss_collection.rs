@@ -37,11 +37,8 @@ pub struct RssCollection {
 
 impl RssCollection {
     pub fn new(ctx: &egui::Context) -> Self {
-        let page_size = ctx
-            .input(|input| input.viewport().inner_rect)
-            .unwrap_or_else(|| Rect::from_center_size(Pos2::ZERO, Vec2::ZERO))
-            .size();
-        let open_sidepanel = page_size.x < SIDEPANEL_COLLAPSE_WIDTH;
+        let page_size = ctx.screen_rect().size();
+        let open_sidepanel = page_size.x >= SIDEPANEL_COLLAPSE_WIDTH;
 
         RssCollection {
             feeds: HashMap::new(),
@@ -58,10 +55,7 @@ impl RssCollection {
     }
 
     pub fn show_feed_list(&mut self, ctx: &egui::Context, requests: &mut Requests) {
-        let page_size = ctx
-            .input(|input| input.viewport().inner_rect)
-            .unwrap_or_else(|| Rect::from_center_size(Pos2::ZERO, Vec2::ZERO))
-            .size();
+        let page_size = ctx.screen_rect().size();
 
         if page_size.x < SIDEPANEL_COLLAPSE_WIDTH
             && self.previous_page_size.x >= SIDEPANEL_COLLAPSE_WIDTH
@@ -75,11 +69,15 @@ impl RssCollection {
             self.open_sidepanel = true;
         }
 
+        self.previous_page_size = page_size;
+
         if !self.open_sidepanel {
             return;
         }
 
         egui::SidePanel::left("side-panel").show(ctx, |ui| {
+            ui.label(format!("Page size: {:?}", self.previous_page_size));
+
             let last_show_read_entries = self.show_unread_entries;
             ui.checkbox(&mut self.show_unread_entries, "Show read entries");
 
