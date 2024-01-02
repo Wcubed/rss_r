@@ -5,14 +5,14 @@ use log::{info, warn};
 use rss_com_lib::{PASSWORD_HEADER, USER_ID_HEADER};
 
 #[derive(Default)]
-pub struct Login {
+pub struct LoginView {
     username: String,
     password: String,
     state: State,
     show_invalid_user_or_password_message: bool,
 }
 
-impl Login {
+impl LoginView {
     /// Returns `true` if the login is successful.
     pub fn show(&mut self, ui: &mut Ui, requests: &mut Requests) -> bool {
         match self.state {

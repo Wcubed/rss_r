@@ -1,4 +1,4 @@
-use crate::login::Login;
+use crate::login::LoginView;
 use crate::requests::{ApiEndpoint, Requests};
 use crate::rss_collection::RssCollection;
 use eframe::Frame;
@@ -11,8 +11,7 @@ pub struct RssApp {
     // TODO (Wybe 2022-07-11): Store config server side? And retrieve on log-in?
     config: Config,
     requests: Requests,
-    login_view: Option<Login>,
-    rss_collection: RssCollection,
+    active_view: ActiveView,
     version_string: String,
 }
 
@@ -35,8 +34,7 @@ impl RssApp {
             config,
             // TODO (Wybe 2022-07-10): Maybe make some kind of page system, where you can switch between pages, and don't need to keep each page in a different variable.
             requests: Requests::new(cc.egui_ctx.clone()),
-            login_view: Some(Login::default()),
-            rss_collection: RssCollection::new(),
+            active_view: ActiveView::Login(LoginView::default()),
             version_string: format!("v{}", VERSION),
         }
     }
@@ -47,51 +45,54 @@ impl eframe::App for RssApp {
         // Update any outstanding http requests.
         self.requests.poll();
 
-        if !self.requests.is_authenticated() && self.login_view.is_none() {
+        let at_login_view = matches!(self.active_view, ActiveView::Login(_));
+
+        if !self.requests.is_authenticated() && !at_login_view {
             // No longer authenticated. Back to login view.
-            self.login_view = Some(Login::default());
+            self.active_view = ActiveView::Login(LoginView::default());
         }
 
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if let Some(dark_mode) = global_dark_light_mode_switch(ui) {
-                    info!("Dark mode: {dark_mode}");
-                    self.config.dark_mode = dark_mode;
+                if let ActiveView::RssCollection(collection) = &mut self.active_view {
+                    collection.show_feeds_button(ui);
                 }
-
-                ui.separator();
 
                 if self.requests.has_request(ApiEndpoint::Logout) {
                     if self.requests.ready(ApiEndpoint::Logout).is_some() {
                         info!("Logged out");
                         self.requests.set_authenticated(false);
-                        self.login_view = Some(Login::default());
+                        self.active_view = ActiveView::Login(LoginView::default());
                     } else {
                         ui.spinner();
                     }
-                } else if self.login_view.is_none() && ui.button("Log out").clicked() {
+                } else if !at_login_view && ui.button("Log out").clicked() {
                     self.requests.new_request_without_body(ApiEndpoint::Logout)
+                }
+
+                ui.separator();
+
+                if let Some(dark_mode) = global_dark_light_mode_switch(ui) {
+                    info!("Dark mode: {dark_mode}");
+                    self.config.dark_mode = dark_mode;
                 }
 
                 ui.label(&self.version_string);
             });
         });
 
-        if self.login_view.is_none() {
-            egui::SidePanel::left("side-panel").show(ctx, |ui| {
-                self.rss_collection.show_feed_list(ui, &mut self.requests)
-            });
+        if let ActiveView::RssCollection(collection) = &mut self.active_view {
+            collection.show_feed_list(ctx, &mut self.requests);
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            if self.login_view.is_none() {
-                self.rss_collection
-                    .show_feed_entries(ui, &mut self.requests);
+            if let ActiveView::RssCollection(collection) = &mut self.active_view {
+                collection.show_feed_entries(ui, &mut self.requests);
             }
         });
 
         let mut logged_in = false;
-        if let Some(login) = &mut self.login_view {
+        if let ActiveView::Login(login) = &mut self.active_view {
             egui::Window::new("Login")
                 .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
                 .resizable(false)
@@ -103,8 +104,7 @@ impl eframe::App for RssApp {
 
         if logged_in {
             self.requests.set_authenticated(true);
-            self.login_view = None;
-            self.rss_collection = RssCollection::new();
+            self.active_view = ActiveView::RssCollection(Box::new(RssCollection::new()));
 
             // Request the available feeds.
             self.requests
@@ -117,6 +117,11 @@ impl eframe::App for RssApp {
         info!("Saving");
         eframe::set_value(storage, eframe::APP_KEY, &self.config);
     }
+}
+
+enum ActiveView {
+    Login(LoginView),
+    RssCollection(Box<RssCollection>),
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]

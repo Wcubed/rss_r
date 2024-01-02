@@ -27,6 +27,8 @@ pub struct RssCollection {
     selected_feed_entries: Vec<DisplayFeedEntry>,
     /// Whether or not to show feed entries that have already been read.
     show_unread_entries: bool,
+    /// Whether to show the side panel with the feed list or not.
+    open_sidepanel: bool,
 }
 
 impl RssCollection {
@@ -34,69 +36,80 @@ impl RssCollection {
         Default::default()
     }
 
-    pub fn show_feed_list(&mut self, ui: &mut Ui, requests: &mut Requests) {
-        let last_show_read_entries = self.show_unread_entries;
-        ui.checkbox(&mut self.show_unread_entries, "Show read entries");
+    pub fn show_feeds_button(&mut self, ui: &mut Ui) {
+        ui.toggle_value(&mut self.open_sidepanel, "Feeds");
+    }
 
-        if last_show_read_entries != self.show_unread_entries {
-            self.update_feed_entries_based_on_selection(requests);
+    pub fn show_feed_list(&mut self, ctx: &egui::Context, requests: &mut Requests) {
+        if !self.open_sidepanel {
+            return;
         }
 
-        if ui.button("Update selected feeds").clicked() {
-            // Request the server to update all the feeds we have selected now,
-            // and return the new entries.
-            requests.new_request_with_json_body(
-                ApiEndpoint::GetFeedEntries,
-                GetFeedEntriesRequest {
-                    feeds: self.get_urls_from_current_selection(),
-                    refresh: true,
-                },
-            )
-        }
+        egui::SidePanel::left("side-panel").show(ctx, |ui| {
+            let last_show_read_entries = self.show_unread_entries;
+            ui.checkbox(&mut self.show_unread_entries, "Show read entries");
 
-        match self.feeds_display.show(ui, requests) {
-            FeedListDisplayResponse::None => {} // Nothing to do
-            FeedListDisplayResponse::FeedInfoEdited(url, new_info) => {
-                if let Some(feed) = self.feeds.get_mut(&url) {
-                    feed.0 = new_info;
-                }
-
-                self.feeds_display.update_feeds(&self.feeds);
+            if last_show_read_entries != self.show_unread_entries {
+                self.update_feed_entries_based_on_selection(requests);
             }
-            FeedListDisplayResponse::SelectionChanged => {
-                self.update_feed_entries_based_on_selection(requests)
+
+            if ui.button("Update selected feeds").clicked() {
+                // Request the server to update all the feeds we have selected now,
+                // and return the new entries.
+                requests.new_request_with_json_body(
+                    ApiEndpoint::GetFeedEntries,
+                    GetFeedEntriesRequest {
+                        feeds: self.get_urls_from_current_selection(),
+                        refresh: true,
+                    },
+                )
             }
-        }
 
-        if requests.has_request(ApiEndpoint::ListFeeds) {
-            if let Some(response) = requests.ready(ApiEndpoint::ListFeeds) {
-                // TODO (Wybe 2022-07-16): Handle errors
-                if let Response::Ok(body) = response {
-                    if let Ok(feeds_response) = serde_json::from_str::<ListFeedsResponse>(&body) {
-                        // Add new feeds and update existing ones.
-                        for (url, info) in feeds_response.feeds.iter() {
-                            if let Some(feed) = self.feeds.get_mut(url) {
-                                // Feed exists. Update it's info.
-                                feed.0 = info.clone();
-                            } else {
-                                self.feeds.insert(url.clone(), (info.clone(), None));
-                            }
-                        }
-
-                        // TODO (Wybe 2022-09-25): Remove feeds that are no longer listed.
-
-                        self.feeds_display.update_feeds(&self.feeds);
-
-                        // We received knowledge of what feeds are in the users collection.
-                        // So we want to update the users currently viewed entries based
-                        // on this new info.
-                        self.update_feed_entries_based_on_selection(requests);
+            match self.feeds_display.show(ui, requests) {
+                FeedListDisplayResponse::None => {} // Nothing to do
+                FeedListDisplayResponse::FeedInfoEdited(url, new_info) => {
+                    if let Some(feed) = self.feeds.get_mut(&url) {
+                        feed.0 = new_info;
                     }
+
+                    self.feeds_display.update_feeds(&self.feeds);
                 }
-            } else {
-                ui.spinner();
+                FeedListDisplayResponse::SelectionChanged => {
+                    self.update_feed_entries_based_on_selection(requests)
+                }
             }
-        }
+
+            if requests.has_request(ApiEndpoint::ListFeeds) {
+                if let Some(response) = requests.ready(ApiEndpoint::ListFeeds) {
+                    // TODO (Wybe 2022-07-16): Handle errors
+                    if let Response::Ok(body) = response {
+                        if let Ok(feeds_response) = serde_json::from_str::<ListFeedsResponse>(&body)
+                        {
+                            // Add new feeds and update existing ones.
+                            for (url, info) in feeds_response.feeds.iter() {
+                                if let Some(feed) = self.feeds.get_mut(url) {
+                                    // Feed exists. Update it's info.
+                                    feed.0 = info.clone();
+                                } else {
+                                    self.feeds.insert(url.clone(), (info.clone(), None));
+                                }
+                            }
+
+                            // TODO (Wybe 2022-09-25): Remove feeds that are no longer listed.
+
+                            self.feeds_display.update_feeds(&self.feeds);
+
+                            // We received knowledge of what feeds are in the users collection.
+                            // So we want to update the users currently viewed entries based
+                            // on this new info.
+                            self.update_feed_entries_based_on_selection(requests);
+                        }
+                    }
+                } else {
+                    ui.spinner();
+                }
+            }
+        });
     }
 
     pub fn show_feed_entries(&mut self, ui: &mut Ui, requests: &mut Requests) {
