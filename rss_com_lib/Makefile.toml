@@ -15,8 +15,16 @@ dependencies = ["build"]
 
 [tasks.run]
 # Run makes no sense for a library. So we overwrite it with an empty echo.
-# We don't need to build the library here, because the `run` step has `build` as a dependency.
-# TODO (Wybe 2024-01-02): There should be a better way than making this "echo"
+# Building is also not necessary, because it gets build as dependency by the
+# client and server code.
 command = "echo"
 args = [""]
-dependencies = ["build"]
+dependencies = []
+
+[tasks.rpi-release]
+# For the com lib, we don't need to do anything for release mode.
+# Explicitly building is not necessary, because it gets build as dependency by the
+# client and server code.
+command = "echo"
+args = [""]
+dependencies = []

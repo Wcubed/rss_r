@@ -29,7 +29,7 @@ feat: Added unicorns to the UI.
 ## Deploy to raspberry pi
 - Install `podman` or `docker` (if you use `docker` you need to have the daemon running before continuing).
 - Install the `zip` command
-- Run `cargo make release-rpi` (tested on linux. Should work on windows, but not tested).
+- Run `cargo make rpi-release` (tested on linux. Should work on windows, but not tested).
 - Copy the zip from `target/packages/` to the target, and extract it.
 - Run `rss_r`.
 

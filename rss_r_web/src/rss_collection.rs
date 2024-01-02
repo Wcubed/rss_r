@@ -76,8 +76,6 @@ impl RssCollection {
         }
 
         egui::SidePanel::left("side-panel").show(ctx, |ui| {
-            ui.label(format!("Page size: {:?}", self.previous_page_size));
-
             let last_show_read_entries = self.show_unread_entries;
             ui.checkbox(&mut self.show_unread_entries, "Show read entries");
 
