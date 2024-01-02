@@ -18,20 +18,17 @@ install_crate = { crate_name = "wasm-bindgen-cli" }
 command = "wasm-bindgen"
 args = [
     "${WASM_TARGET_DIR}${CARGO_MAKE_CRATE_NAME}.wasm",
-    "--out-dir", "../resources/static/wasm/",
+    "--out-dir",
+    "../resources/static/wasm/",
     "--no-modules",
-    "--no-typescript"
+    "--no-typescript",
 ]
-dependencies = [
-    "install-wasm-bindgen",
-    "format",
-    "build-wasm",
-]
+dependencies = ["install-wasm-bindgen", "format", "build-wasm"]
 
 [tasks.run]
 # Run makes no sense for a library. So we overwrite it with an empty echo.
 # We don't need to build the library here, because the `run` step has `build` as a dependency.
-# TODO (Wybe 2022-07-10): There should be a better way.
+# TODO (Wybe 2022-07-10): There should be a better way than making this "echo"
 command = "echo"
 args = [""]
 dependencies = ["build"]

@@ -1,6 +1,6 @@
 [package]
 name = "rss_r_web"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 
 [lib]
@@ -13,7 +13,7 @@ egui = "0.19.0"
 eframe = { version = "0.19.0", features = ["persistence"] }
 serde = { version = "1", features = ["derive"] }
 log = "0.4.17"
-console_log = "0.2.0" # Logs to web console
+console_log = "0.2.0"                                       # Logs to web console
 chrono = "0.4"
 
 ehttp = "0.2.0"

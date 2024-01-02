@@ -12,7 +12,7 @@ actix-web = { version = "4", features = ["rustls"] }
 actix-web-lab = "0.18.5"
 actix-files = "0.6.1"
 actix-identity = "0.5.2"
-actix-session = { version = "0.7.2", features = ["cookie-session"]}
+actix-session = { version = "0.7.2", features = ["cookie-session"] }
 
 feed-rs = "1.1"
 log = "0.4.17"
@@ -37,6 +37,4 @@ pretty_assertions = "1.3.0"
 opt-level = 2 # fast and small wasm
 
 [workspace]
-members = [
-    "rss_r_web"
-]
+members = ["rss_r_web"]

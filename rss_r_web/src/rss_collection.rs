@@ -3,6 +3,7 @@ use crate::edit_feed_popup::{EditFeedPopup, EditFeedPopupResponse};
 use crate::hyperlink::NewTabHyperlink;
 use crate::requests::{ApiEndpoint, Requests, Response};
 use chrono::Local;
+use egui::collapsing_header::CollapsingState;
 use egui::{Color32, RichText, Ui};
 use rss_com_lib::message_body::{
     GetFeedEntriesRequest, GetFeedEntriesResponse, ListFeedsResponse,
@@ -267,13 +268,13 @@ impl RssCollection {
         // TODO (Wybe 2022-07-18): Queue request if another request is outgoing.
         // TODO (Wybe 2022-07-18): Change the main display already to whatever we have loaded from our local storage?
         //                          and update the display when the request returns.
-        let mut urls_to_display = self.get_urls_from_current_selection();
+        let urls_to_display = self.get_urls_from_current_selection();
         let mut urls_to_request = HashSet::new();
 
         // Check which feeds we already have the items of,
         // and therefore don't need to request from the server.
         for url in urls_to_display.iter() {
-            if let Some((feed_info, maybe_entries)) = self.feeds.get(&url) {
+            if let Some((feed_info, maybe_entries)) = self.feeds.get(url) {
                 if let Some(entries) = maybe_entries {
                     // TODO (Wybe 2022-07-19): there is probably a more efficient way than cloning everything.
                     for (key, entry) in entries.iter() {
@@ -539,50 +540,53 @@ impl FeedListDisplay {
             }
 
             for (tag, feeds) in self.feed_tags.iter() {
-                ui.collapsing(tag, |ui| {
-                    let tag_selected = match &self.selection {
-                        FeedSelection::Tag(selected_tag, _) => selected_tag == tag,
-                        _ => false,
-                    };
-
-                    if selectable_value(ui, tag_selected, "All") {
-                        self.selection = FeedSelection::Tag(
-                            tag.clone(),
-                            feeds.iter().map(|(url, _)| url.clone()).collect(),
-                        );
-
-                        response = FeedListDisplayResponse::SelectionChanged;
-                    }
-
-                    for (url, info) in feeds {
-                        let selected = match &self.selection {
-                            FeedSelection::Feed(selected_url) => selected_url == url,
+                let collapse_id = ui.make_persistent_id(tag);
+                CollapsingState::load_with_default_open(ui.ctx(), collapse_id, false)
+                    .show_header(ui, |ui| {
+                        let tag_selected = match &self.selection {
+                            FeedSelection::Tag(selected_tag, _) => selected_tag == tag,
                             _ => false,
                         };
 
-                        ui.horizontal(|ui| {
-                            ui.label("-");
-                            ui.horizontal_wrapped(|ui| {
-                                if selectable_value(ui, selected, &info.name) {
-                                    self.selection = FeedSelection::Feed(url.clone());
-                                    response = FeedListDisplayResponse::SelectionChanged;
-                                }
+                        if selectable_value(ui, tag_selected, tag) {
+                            self.selection = FeedSelection::Tag(
+                                tag.clone(),
+                                feeds.iter().map(|(url, _)| url.clone()).collect(),
+                            );
 
-                                // Only show the edit buton if the feed is selected.
-                                if selected
-                                    && ui.button("Edit").clicked()
-                                    && self.edit_feed_popup.is_none()
-                                {
-                                    self.edit_feed_popup = Some(EditFeedPopup::new(
-                                        url.clone(),
-                                        info.clone(),
-                                        self.known_tags.clone(),
-                                    ));
-                                }
+                            response = FeedListDisplayResponse::SelectionChanged;
+                        }
+                    })
+                    .body(|ui| {
+                        for (url, info) in feeds {
+                            let selected = match &self.selection {
+                                FeedSelection::Feed(selected_url) => selected_url == url,
+                                _ => false,
+                            };
+
+                            ui.horizontal(|ui| {
+                                ui.label("-");
+                                ui.horizontal_wrapped(|ui| {
+                                    if selectable_value(ui, selected, &info.name) {
+                                        self.selection = FeedSelection::Feed(url.clone());
+                                        response = FeedListDisplayResponse::SelectionChanged;
+                                    }
+
+                                    // Only show the edit buton if the feed is selected.
+                                    if selected
+                                        && ui.button("Edit").clicked()
+                                        && self.edit_feed_popup.is_none()
+                                    {
+                                        self.edit_feed_popup = Some(EditFeedPopup::new(
+                                            url.clone(),
+                                            info.clone(),
+                                            self.known_tags.clone(),
+                                        ));
+                                    }
+                                });
                             });
-                        });
-                    }
-                });
+                        }
+                    });
             }
         });
 
