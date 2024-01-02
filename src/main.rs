@@ -13,7 +13,7 @@ mod users;
 use crate::app_config::ApplicationConfig;
 use crate::auth::{AuthData, AUTH_COOKIE_NAME};
 use crate::auth_middleware::{AuthenticateMiddlewareFactory, Authenticated};
-use crate::cookie::{Cookie, SameSite};
+use crate::cookie::SameSite;
 use crate::feed_requester::FeedRequester;
 use crate::persistence::SaveInRonFile;
 use crate::rss_collection::RssCollections;
@@ -27,7 +27,6 @@ use actix_web::middleware::Logger;
 use actix_web::rt::{spawn, time};
 use actix_web::web::Data;
 use actix_web::{cookie, web, App, HttpServer};
-use actix_web_lab::web::redirect;
 use log::{info, warn, LevelFilter};
 use simplelog::{
     format_description, ColorChoice, CombinedLogger, ConfigBuilder, TermLogger, TerminalMode,
@@ -101,8 +100,8 @@ async fn main() -> std::io::Result<()> {
 
         App::new().wrap(Logger::default()).service(
             web::scope(&app_config.route_prefix)
-                .service(redirect("/", "app/index.html"))
-                .service(redirect("/app/", "index.html"))
+                .service(web::redirect("/", "app/index.html"))
+                .service(web::redirect("/app/", "index.html"))
                 // This serves the static files of the rss_r_web webassembly application.
                 .service(Files::new("/app", "resources/static"))
                 .service(

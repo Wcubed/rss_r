@@ -41,7 +41,7 @@ impl RssApp {
 }
 
 impl eframe::App for RssApp {
-    fn update(&mut self, ctx: &Context, frame: &mut Frame) {
+    fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
         // Update any outstanding http requests.
         self.requests.poll();
 
@@ -82,7 +82,7 @@ impl eframe::App for RssApp {
         });
 
         if let ActiveView::RssCollection(collection) = &mut self.active_view {
-            collection.show_feed_list(frame, ctx, &mut self.requests);
+            collection.show_feed_list(ctx, &mut self.requests);
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
