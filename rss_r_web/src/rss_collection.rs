@@ -4,7 +4,7 @@ use crate::hyperlink::NewTabHyperlink;
 use crate::requests::{ApiEndpoint, Requests, Response};
 use chrono::Local;
 use egui::collapsing_header::CollapsingState;
-use egui::{Color32, RichText, Ui};
+use egui::{Color32, Pos2, Rect, RichText, Ui, Vec2};
 use rss_com_lib::message_body::{
     GetFeedEntriesRequest, GetFeedEntriesResponse, ListFeedsResponse,
     SetEntryReadRequestAndResponse,
@@ -14,9 +14,10 @@ use rss_com_lib::Url;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
+const SIDEPANEL_COLLAPSE_WIDTH: f32 = 900.0;
+
 /// Stores info about the rss feeds the user is following.
 /// Is updated by information received from the server.
-#[derive(Default)]
 pub struct RssCollection {
     /// url -> Feed
     /// If the entries are [None] that means we have not requested the feed entries from the server.
@@ -29,11 +30,27 @@ pub struct RssCollection {
     show_unread_entries: bool,
     /// Whether to show the side panel with the feed list or not.
     open_sidepanel: bool,
+    /// Previous size of the web page
+    /// used to determine when the size changes.
+    previous_page_size: Vec2,
 }
 
 impl RssCollection {
-    pub fn new() -> Self {
-        Default::default()
+    pub fn new(ctx: &egui::Context) -> Self {
+        let page_size = ctx
+            .input(|input| input.viewport().inner_rect)
+            .unwrap_or_else(|| Rect::from_center_size(Pos2::ZERO, Vec2::ZERO))
+            .size();
+        let open_sidepanel = page_size.x < SIDEPANEL_COLLAPSE_WIDTH;
+
+        RssCollection {
+            feeds: HashMap::new(),
+            feeds_display: FeedListDisplay::new(),
+            selected_feed_entries: vec![],
+            show_unread_entries: false,
+            open_sidepanel,
+            previous_page_size: page_size,
+        }
     }
 
     pub fn show_feeds_button(&mut self, ui: &mut Ui) {
@@ -41,6 +58,23 @@ impl RssCollection {
     }
 
     pub fn show_feed_list(&mut self, ctx: &egui::Context, requests: &mut Requests) {
+        let page_size = ctx
+            .input(|input| input.viewport().inner_rect)
+            .unwrap_or_else(|| Rect::from_center_size(Pos2::ZERO, Vec2::ZERO))
+            .size();
+
+        if page_size.x < SIDEPANEL_COLLAPSE_WIDTH
+            && self.previous_page_size.x >= SIDEPANEL_COLLAPSE_WIDTH
+        {
+            // Went below the collapse size.
+            self.open_sidepanel = false;
+        } else if page_size.x >= SIDEPANEL_COLLAPSE_WIDTH
+            && self.previous_page_size.x < SIDEPANEL_COLLAPSE_WIDTH
+        {
+            // Went above the collapse size.
+            self.open_sidepanel = true;
+        }
+
         if !self.open_sidepanel {
             return;
         }

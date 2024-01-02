@@ -93,7 +93,9 @@ impl LoginView {
             .add_enabled(login_interactive, Button::new("Log in"))
             .clicked();
 
-        if log_in_clicked || (response.lost_focus() && ui.input().key_pressed(egui::Key::Enter)) {
+        if log_in_clicked
+            || (response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)))
+        {
             requests.new_request(ApiEndpoint::Login, |req| {
                 // TODO (Wybe 2022-07-10): Should the id and password be base64 encoded?
                 req.headers

@@ -133,7 +133,8 @@ impl TagSelector {
             let add_button_clicked = ui.button("+").clicked();
 
             if add_button_clicked
-                || (edit_response.lost_focus() && ui.input().key_pressed(egui::Key::Enter))
+                || (edit_response.lost_focus()
+                    && ui.input(|input| input.key_pressed(egui::Key::Enter)))
             {
                 // Check if tag exists.
                 let tag_is_new = !self.tags.iter().any(|(tag, _)| tag == &self.new_tag);

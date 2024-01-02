@@ -1,5 +1,3 @@
-/* From https://github.com/emilk/eframe_template */
-
 var cacheName = 'egui-template-pwa';
 var filesToCache = [
     './',

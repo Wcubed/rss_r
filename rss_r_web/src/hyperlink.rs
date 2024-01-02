@@ -25,9 +25,11 @@ impl Widget for NewTabHyperlink {
 
         let response = ui.add(Link::new(text));
         if response.clicked() {
-            ui.ctx().output().open_url = Some(OpenUrl {
-                url: url.clone(),
-                new_tab: true,
+            ui.ctx().output_mut(|output| {
+                output.open_url = Some(OpenUrl {
+                    url: url.clone(),
+                    new_tab: true,
+                })
             });
         }
         response.on_hover_text(url)

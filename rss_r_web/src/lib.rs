@@ -10,6 +10,7 @@ mod requests;
 mod rss_collection;
 
 pub use app::RssApp;
+#[cfg(target_arch = "wasm32")]
 use log::Level;
 
 #[cfg(target_arch = "wasm32")]
@@ -21,26 +22,43 @@ const POPUP_ALIGN: Align2 = Align2::CENTER_TOP;
 /// All the popups should be offset from [POPUP_ALIGN] by this much.
 const POPUP_OFFSET: Vec2 = Vec2::new(0., 40.0);
 
-/// This is the entry-point for all the web-assembly.
-/// This is called once from the HTML.
-/// It loads the app, installs some callbacks, then returns.
-/// You can add more callbacks like this if you want to call in to your code.
+/// Your handle to the web app from JavaScript.
+#[derive(Clone)]
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
-pub fn start(canvas_id: &str) {
-    // Make sure panics are logged using `console.error`.
-    console_error_panic_hook::set_once();
+pub struct WebHandle {
+    runner: eframe::WebRunner,
+}
 
-    console_log::init_with_level(Level::Debug).unwrap();
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+impl WebHandle {
+    #[allow(clippy::new_without_default)]
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        // Make sure panics are logged using `console.error`.
+        console_error_panic_hook::set_once();
 
-    // Redirect tracing to console.log and friends:
-    tracing_wasm::set_as_global_default();
+        // Redirect [`log`] message to `console.log` and friends:
+        console_log::init_with_level(Level::Debug).unwrap();
 
-    let web_options = eframe::WebOptions::default();
-    eframe::start_web(
-        canvas_id,
-        web_options,
-        Box::new(|cc| Box::new(RssApp::new(cc))),
-    )
-    .expect("Failed to start eframe");
+        // Redirect tracing to console.log and friends:
+        tracing_wasm::set_as_global_default();
+
+        Self {
+            runner: eframe::WebRunner::new(),
+        }
+    }
+
+    #[wasm_bindgen]
+    pub async fn start(&self, canvas_id: &str) -> Result<(), wasm_bindgen::JsValue> {
+        let web_options = eframe::WebOptions::default();
+        self.runner
+            .start(
+                canvas_id,
+                web_options,
+                Box::new(|cc| Box::new(RssApp::new(cc))),
+            )
+            .await
+    }
 }
