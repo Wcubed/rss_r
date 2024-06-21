@@ -232,10 +232,10 @@ fn configure_logging() {
         ColorChoice::Auto,
     );
 
-    create_dir_all(&log_dir)
+    create_dir_all(log_dir)
         .unwrap_or_else(|_| panic!("Could not create all directories for `{}`", &log_dir));
 
-    let date = chrono::offset::Local::today();
+    let date = chrono::offset::Local::now();
     let file_name = format!("{}/rss_r_{}.log", log_dir, date.format("%Y-%m-%d"));
 
     // We open the log file in append mode, so we don't overwrite any logs might already be there.

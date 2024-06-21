@@ -32,8 +32,11 @@ pub trait SaveInRonFile: Sized + Default + Serialize + DeserializeOwned {
 
         match to_string_pretty(self, PrettyConfig::default()) {
             Ok(serialized) => {
-                fs::write(&path, serialized)
-                    .map_err(|e| warn!("Could not save to `{}`: {}", path.display(), e));
+                let result = fs::write(&path, serialized);
+
+                if let Err(error) = result {
+                    warn!("Could not save to `{}`: {}", path.display(), error)
+                }
             }
             Err(e) => {
                 warn!("Could not convert to RON for `{}`: {}", path.display(), e);

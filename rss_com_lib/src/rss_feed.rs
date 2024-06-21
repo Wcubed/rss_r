@@ -1,5 +1,6 @@
 use crate::Url;
-use chrono::{DateTime, TimeZone, Utc};
+use base64::prelude::*;
+use chrono::{DateTime, Utc};
 use feed_rs::model;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
@@ -94,7 +95,7 @@ impl EntryKey {
 impl Debug for EntryKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("EntryKey(")?;
-        f.write_str(&base64::encode(self.0))?;
+        f.write_str(&BASE64_STANDARD.encode(self.0))?;
         f.write_str(")")
     }
 }
@@ -107,7 +108,7 @@ impl Serialize for EntryKey {
         // To send hashmaps as json (which is used by actix to send a response body)
         // the keys need to be strings.
         // Also, this is more compact than printing it as a list of base 10 numbers.
-        serializer.serialize_str(&base64::encode(self.0))
+        serializer.serialize_str(&BASE64_STANDARD.encode(self.0))
     }
 }
 
@@ -120,7 +121,9 @@ impl<'de> Deserialize<'de> for EntryKey {
 
         String::deserialize(deserializer)
             .and_then(|string| {
-                base64::decode(&string).map_err(|err| Error::custom(err.to_string()))
+                BASE64_STANDARD
+                    .decode(string)
+                    .map_err(|err| Error::custom(err.to_string()))
             })
             .and_then(|byte_vec| {
                 byte_vec.try_into().map_err(|_| {
@@ -145,7 +148,7 @@ pub struct FeedEntry {
 impl FeedEntry {
     pub fn from_raw_feed_entry(item: &model::Entry) -> (EntryKey, Self) {
         // If the entry has no publication date, we will us a default date far in the past.
-        let default_date = Utc.ymd(1900, 1, 1).and_hms(1, 1, 1);
+        let default_date = DateTime::UNIX_EPOCH;
 
         let pub_date = item
             .published
@@ -213,7 +216,7 @@ mod tests {
         let entry = FeedEntry {
             title: "Title".to_owned(),
             link: None,
-            pub_date: Utc.ymd(2022, 9, 10).and_hms(1, 3, 4),
+            pub_date: Utc.with_ymd_and_hms(2022, 9, 10, 1, 3, 4).unwrap(),
             read: false,
         };
 

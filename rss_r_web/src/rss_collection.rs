@@ -4,7 +4,7 @@ use crate::hyperlink::NewTabHyperlink;
 use crate::requests::{ApiEndpoint, Requests, Response};
 use chrono::Local;
 use egui::collapsing_header::CollapsingState;
-use egui::{Color32, Pos2, Rect, RichText, Ui, Vec2};
+use egui::{Color32, RichText, Ui, Vec2};
 use rss_com_lib::message_body::{
     GetFeedEntriesRequest, GetFeedEntriesResponse, ListFeedsResponse,
     SetEntryReadRequestAndResponse,

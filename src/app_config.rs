@@ -35,7 +35,7 @@ impl Default for ApplicationConfig {
             port: 8443,
             route_prefix: "".to_string(),
             // If no key is supplied, generate one.
-            session_key: cookie::Key::generate().master().iter().cloned().collect(),
+            session_key: cookie::Key::generate().master().to_vec(),
         }
     }
 }

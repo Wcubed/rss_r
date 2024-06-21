@@ -43,7 +43,7 @@ impl AuthData {
 
         if let Ok(Some(id)) = identity
             .id()
-            .and_then(|user_id_string| Ok(UserId::from_str(&user_id_string)))
+            .map(|user_id_string| UserId::from_str(&user_id_string))
         {
             users.get(&id).map(|info| AuthenticationResult {
                 user: info.get_request_info(id),
@@ -134,7 +134,7 @@ pub async fn login(req: HttpRequest, auth_data: web::Data<AuthData>) -> impl Res
         if let Some(user_id) = auth_data.validate_password(user_name, password) {
             info!("Logging in `{}` with password", user_name);
             // Login valid. Remember in the session that the user logged in.
-            if let Err(error) = Identity::login(&req.extensions(), user_id.0.to_string().into()) {
+            if let Err(error) = Identity::login(&req.extensions(), user_id.0.to_string()) {
                 warn!(
                     "Something went wrong while trying to log in user `{}`: {}",
                     user_name, error

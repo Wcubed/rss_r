@@ -111,15 +111,11 @@ impl LoginView {
     }
 }
 
+#[derive(Debug, Default, Clone, Copy)]
 enum State {
+    #[default]
     New,
     TryIdentityCookieLogin,
     UsernameAndPasswordLogin,
     LoggedIn,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        State::New
-    }
 }
