@@ -101,9 +101,9 @@ async fn main() -> std::io::Result<()> {
         App::new().wrap(Logger::default()).service(
             web::scope(&app_config.route_prefix)
                 .service(web::redirect("/", "app/index.html"))
-                .service(web::redirect("/app/", "index.html"))
+                .service(web::redirect("/app/", "app/index.html"))
                 // This serves the static files of the rss_r_web webassembly application.
-                .service(Files::new("/app", "resources/static"))
+                .service(Files::new("/app", "static"))
                 .service(
                     web::scope("/api")
                         .app_data(web_auth_data.clone())

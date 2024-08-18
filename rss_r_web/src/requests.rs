@@ -84,7 +84,6 @@ impl Requests {
         self.promises.contains_key(&endpoint)
     }
 
-    /// TODO (Wybe 2022-07-11): Make this use proper response types instead of strings.
     /// Returns `Some` if a request returned successfully, and clears the request.
     pub fn ready(&mut self, endpoint: ApiEndpoint) -> Option<Response> {
         let mut promise_handled = false;

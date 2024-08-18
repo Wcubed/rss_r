@@ -6,24 +6,13 @@ WASM_TARGET_DIR = "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}/${TARGET_TRIPLE}/debug/"
 command = "rustup"
 args = ["target", "add", "${TARGET_TRIPLE}"]
 
-[tasks.build-wasm]
-command = "cargo"
-args = ["build", "--lib", "--target", "${TARGET_TRIPLE}", "${@}"]
-dependencies = ["install-rustup-target-wasm32"]
-
-[tasks.install-wasm-bindgen]
-install_crate = { crate_name = "wasm-bindgen-cli" }
+[tasks.install-trunk]
+install_crate = { crate_name = "trunk" }
 
 [tasks.build]
-command = "wasm-bindgen"
-args = [
-    "${WASM_TARGET_DIR}${CARGO_MAKE_CRATE_NAME}.wasm",
-    "--out-dir",
-    "../resources/static/wasm/",
-    "--no-modules",
-    "--no-typescript",
-]
-dependencies = ["install-wasm-bindgen", "format", "build-wasm"]
+command = "trunk"
+args = ["build"]
+dependencies = ["install-rustup-target-wasm32", "install-trunk", "format"]
 
 [tasks.run]
 # Run makes no sense for a library. So we overwrite it with an empty echo.
@@ -33,12 +22,7 @@ command = "echo"
 args = [""]
 dependencies = ["build"]
 
-# TODO (Wybe 2022-07-10): Add wasm-opt: [See example from eframe](https://github.com/emilk/eframe_template/blob/9ff285409d4b73fdc575eff517ceb7059664dfe4/build_web.sh#L60)
-# TODO (Wybe 2022-07-10): Add a build-release workflow.
-
 [tasks.rpi-release]
-# For the web library, we don't need to do anything special to release to the raspbery pi
-# So we can simply build in release mode.
-command = "cargo"
-args = ["build", "--lib", "--target", "${TARGET_TRIPLE}", "--release"]
-dependencies = ["install-rustup-target-wasm32"]
+command = "trunk"
+args = ["build", "--release"]
+dependencies = ["install-rustup-target-wasm32", "install-trunk"]

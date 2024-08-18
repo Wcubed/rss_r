@@ -1,6 +1,6 @@
 [package]
 name = "rss_r"
-version = "0.0.4"
+version = "0.0.5"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -8,33 +8,37 @@ edition = "2021"
 [dependencies]
 rss_com_lib = { path = "rss_com_lib" }
 
-actix-web = { version = "4", features = ["rustls"] }
-actix-web-lab = "0.20.1"
-actix-files = "0.6.1"
+actix-web = { version = "4.9.0", features = ["rustls"] }
+actix-web-lab = "0.22.0"
+actix-files = "0.6.6"
 actix-identity = "0.7.1"
-actix-session = { version = "0.9.0", features = ["cookie-session"] }
+actix-session = { version = "0.10.0", features = ["cookie-session"] }
 
-feed-rs = "2.0.0"
-log = "0.4.17"
-simplelog = "0.12.0"
-thiserror = "1.0.31"
+feed-rs = "2.1.0"
+log = "0.4.22"
+simplelog = "0.12.2"
+thiserror = "1.0.63"
 reqwest = "0.12.5"
-ron = "0.8.0"
-serde = { version = "1", features = ["derive"] }
-chrono = "0.4"
+ron = "0.8.1"
+serde = { version = "1.0.208", features = ["derive"] }
+chrono = "0.4.38"
 # Needed for simplelog's time settings.
-time = "0.3.1"
+time = "0.3.36"
 # We specifically specify the `openssl` crate, even though we don't depend on it directly,
 # because we need to enable the `vendored` feature to make cross compilation to the raspberry pi work.
 # See https://github.com/messense/rust-musl-cross/issues/44
 # and https://stackoverflow.com/questions/68871193/pkg-config-error-during-rust-cross-compilation
-openssl = { version = "0.10.42", features = ["vendored"] }
+openssl = { version = "0.10.66", features = ["vendored"] }
 
 [dev-dependencies]
-pretty_assertions = "1.3.0"
+pretty_assertions = "1.4.0"
 
 [profile.release]
-opt-level = 2 # fast and small wasm
+opt-level = 2
+
+# Optimize all dependencies even in debug builds:
+[profile.dev.package."*"]
+opt-level = 2
 
 [workspace]
 members = ["rss_r_web"]
