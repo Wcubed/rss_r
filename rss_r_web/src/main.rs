@@ -16,7 +16,7 @@ fn main() {
             .start(
                 "rss_canvas_id",
                 web_options,
-                Box::new(|cc| Ok(Box::new(rss_r_web::RssApp::new(cc)))),
+                Box::new(|cc| Box::new(rss_r_web::RssApp::new(cc))),
             )
             .await;
 
