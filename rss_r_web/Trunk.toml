@@ -1,6 +1,6 @@
 [build]
 dist = "../static"
-public_url = "/app"
+public_url = "./"
 
 [clean]
 dist = "../static"
