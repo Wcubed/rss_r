@@ -17,10 +17,6 @@ pub struct AuthData {
 }
 
 impl AuthData {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
     /// TODO (Wybe 2022-07-12): Take encrypted password instead of raw string.
     /// TODO (Wybe 2022-07-12): Have a maximum to the user name length?
     /// TODO (Wybe 2022-07-12): Instead of the username to log-in, use an email address?
@@ -132,15 +128,19 @@ pub async fn login(req: HttpRequest, auth_data: web::Data<AuthData>) -> impl Res
     ) {
         // TODO (Wybe 2022-07-10): Allow registering and remembering users and such.
         if let Some(user_id) = auth_data.validate_password(user_name, password) {
-            info!("Logging in `{}` with password", user_name);
             // Login valid. Remember in the session that the user logged in.
             if let Err(error) = Identity::login(&req.extensions(), user_id.0.to_string()) {
                 warn!(
-                    "Something went wrong while trying to log in user `{}`: {}",
+                    "Something went wrong while trying to log in user with password `{}`: {}",
                     user_name, error
-                )
+                );
+
+                HttpResponse::Unauthorized().finish()
+            } else {
+                info!("User `{user_name}` logged in with password");
+
+                HttpResponse::Ok().finish()
             }
-            HttpResponse::Ok().finish()
         } else {
             HttpResponse::Unauthorized().finish()
         }

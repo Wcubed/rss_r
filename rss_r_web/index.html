@@ -16,8 +16,6 @@
 
     <link data-trunk rel="icon" href="assets/images/favicon.png">
 
-    <link data-trunk rel="copy-file" href="assets/sw.js" />
-
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="white">
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#404040">
 
@@ -121,17 +119,6 @@
         </p>
         <div class="lds-dual-ring"></div>
     </div>
-
-    <!--Register Service Worker. this will cache the wasm / js scripts for offline use (for PWA functionality). -->
-    <!-- Force refresh (Ctrl + F5) to load the latest files instead of cached files  -->
-    <script>
-        // We disable caching during development so that we always view the latest version.
-        if ('serviceWorker' in navigator && window.location.hash !== "#dev") {
-            window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js');
-            });
-        }
-    </script>
 </body>
 
 </html>

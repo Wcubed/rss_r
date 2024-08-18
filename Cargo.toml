@@ -12,7 +12,9 @@ actix-web = { version = "4.9.0", features = ["rustls"] }
 actix-web-lab = "0.22.0"
 actix-files = "0.6.6"
 actix-identity = "0.7.1"
-actix-session = { version = "0.10.0", features = ["cookie-session"] }
+# Actix-identity uses actix-session 0.9.0, so we should use this version as well.
+# Otherwise the identity won't be saved in the session.
+actix-session = { version = "0.9.0", features = ["cookie-session"] }
 
 feed-rs = "2.1.0"
 log = "0.4.22"

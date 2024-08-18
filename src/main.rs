@@ -20,11 +20,11 @@ use crate::rss_collection::RssCollections;
 use crate::users::UserInfo;
 use actix_files::Files;
 use actix_identity::IdentityMiddleware;
-use actix_session::config::CookieContentSecurity;
+use actix_session::config::{CookieContentSecurity, PersistentSession, SessionLifecycle};
 use actix_session::storage::CookieSessionStore;
 use actix_session::SessionMiddleware;
 use actix_web::middleware::Logger;
-use actix_web::rt::{spawn, time};
+use actix_web::rt::spawn;
 use actix_web::web::Data;
 use actix_web::{cookie, web, App, HttpServer};
 use log::{info, warn, LevelFilter};
@@ -40,7 +40,9 @@ use std::time::Duration;
 
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const LOGIN_DEADLINE: Duration = Duration::from_secs(3600 * 24 * 14);
+/// Maximum time a user will stay logged in if the session state does not change.
+/// If the session state changes, this time will be reset. (But I don't think I change the session state after the first login, so that won't be a thing)
+const SESSION_TIME_TO_LIVE: time::Duration = time::Duration::days(14);
 
 /// How often the feed collections will be saved, if they have changed in the meantime.
 const COLLECTIONS_SAVE_INTERVAL: Duration = Duration::from_secs(120);
@@ -85,12 +87,11 @@ async fn main() -> std::io::Result<()> {
     let collections_save_on_application_close = web_rss_collections.clone();
 
     HttpServer::new(move || {
-        let identity_middleware = IdentityMiddleware::builder()
-            .login_deadline(Some(LOGIN_DEADLINE))
-            .build();
-
         let session_middleware =
             SessionMiddleware::builder(CookieSessionStore::default(), auth_master_key.clone())
+                .session_lifecycle(SessionLifecycle::PersistentSession(
+                    PersistentSession::default().session_ttl(SESSION_TIME_TO_LIVE),
+                ))
                 .cookie_content_security(CookieContentSecurity::Private)
                 .cookie_same_site(SameSite::Strict)
                 .cookie_http_only(true)
@@ -101,7 +102,7 @@ async fn main() -> std::io::Result<()> {
         App::new().wrap(Logger::default()).service(
             web::scope(&app_config.route_prefix)
                 .service(web::redirect("/", "app/index.html"))
-                .service(web::redirect("/app/", "app/index.html"))
+                .service(web::redirect("/app/", "index.html"))
                 // This serves the static files of the rss_r_web webassembly application.
                 .service(Files::new("/app", "static"))
                 .service(
@@ -110,7 +111,7 @@ async fn main() -> std::io::Result<()> {
                         .app_data(web_rss_collections.clone())
                         .app_data(Data::new(FeedRequester::default()))
                         .wrap(AuthenticateMiddlewareFactory)
-                        .wrap(identity_middleware)
+                        .wrap(IdentityMiddleware::default())
                         // Session middleware has to be added _after_ identity middleware.
                         .wrap(session_middleware)
                         .service(auth::test_auth_cookie)
@@ -138,7 +139,7 @@ async fn main() -> std::io::Result<()> {
 
 fn spawn_periodic_saving_task(collections: Data<RssCollections>, interval: Duration) {
     spawn(async move {
-        let mut save_interval = time::interval(interval);
+        let mut save_interval = actix_web::rt::time::interval(interval);
 
         let mut hasher = DefaultHasher::new();
         collections.hash(&mut hasher);
@@ -164,7 +165,7 @@ fn spawn_periodic_saving_task(collections: Data<RssCollections>, interval: Durat
 /// Will do the first update when this funcion is called.
 fn spawn_periodic_feed_update_task(collections: Data<RssCollections>, interval: Duration) {
     spawn(async move {
-        let mut update_interval = time::interval(interval);
+        let mut update_interval = actix_web::rt::time::interval(interval);
         let feed_requester = FeedRequester::default();
         // The timeout for background updates can be a lot higher than when a user is waiting.
         let timeout = Duration::from_secs(20);
@@ -224,9 +225,11 @@ fn configure_logging() {
         .set_target_level(LevelFilter::Trace)
         .build();
 
+    let log_level = LevelFilter::Info;
+
     let term_logger = TermLogger::new(
         // TODO (Wybe 2022-07-16): Allow changing this through command line arguments
-        LevelFilter::Info,
+        log_level,
         config.clone(),
         TerminalMode::Mixed,
         ColorChoice::Auto,
@@ -245,7 +248,7 @@ fn configure_logging() {
         .open(&file_name)
         .unwrap_or_else(|_| panic!("Could not open `{}` for writing", file_name));
 
-    let file_logger = WriteLogger::new(LevelFilter::Info, config, log_file);
+    let file_logger = WriteLogger::new(log_level, config, log_file);
 
     // We log both to the terminal, and to a file.
     CombinedLogger::init(vec![term_logger, file_logger]).unwrap();

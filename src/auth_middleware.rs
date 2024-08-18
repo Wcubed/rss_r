@@ -9,7 +9,7 @@ use actix_web::dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Tr
 use actix_web::{web, FromRequest, HttpMessage};
 use actix_web_lab::__reexports::futures_util::future::LocalBoxFuture;
 use actix_web_lab::__reexports::futures_util::FutureExt;
-use log::error;
+use log::{error, warn};
 use std::future::{ready, Ready};
 use std::rc::Rc;
 
@@ -77,6 +77,8 @@ where
                     req.extensions_mut()
                         .insert::<AuthenticationInfo>(Rc::new(auth));
                 }
+            } else {
+                warn!("Endpoint requires authentication. But no identity is given.");
             }
 
             async move {
