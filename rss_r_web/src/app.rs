@@ -69,10 +69,6 @@ impl eframe::App for RssApp {
                     self.requests.new_request_without_body(ApiEndpoint::Logout)
                 }
 
-                if let ActiveView::RssCollection(collection) = &mut self.active_view {
-                    collection.show_entry_amount_display(ui, &mut self.requests);
-                }
-
                 ui.separator();
 
                 if let Some(dark_mode) = global_dark_light_mode_switch(ui) {
@@ -81,6 +77,12 @@ impl eframe::App for RssApp {
                 }
 
                 ui.label(&self.version_string);
+
+                ui.separator();
+
+                if let ActiveView::RssCollection(collection) = &mut self.active_view {
+                    collection.show_entry_amount_display(ui, &mut self.requests);
+                }
             });
         });
 

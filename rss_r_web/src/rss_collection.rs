@@ -164,6 +164,8 @@ impl RssDisplay {
                 ))
                 .clicked()
             {
+                self.requested_entry_amount =
+                    self.feed_entries.len() + DEFAULT_ENTRY_REQUEST_AMOUNT;
                 requests.new_request_with_json_body(
                     ApiEndpoint::Feeds,
                     FeedsRequest {
@@ -173,7 +175,7 @@ impl RssDisplay {
                         } else {
                             EntryTypeFilter::UnreadOnly
                         },
-                        amount: self.feed_entries.len() + DEFAULT_ENTRY_REQUEST_AMOUNT,
+                        amount: self.requested_entry_amount,
                         additional_action: AdditionalAction::None,
                     },
                 )
