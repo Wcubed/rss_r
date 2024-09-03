@@ -2,7 +2,7 @@ use crate::add_feed_popup::{AddFeedPopup, AddFeedPopupResponse};
 use crate::edit_feed_popup::{EditFeedPopup, EditFeedPopupResponse};
 use crate::requests::Requests;
 use egui::collapsing_header::CollapsingState;
-use egui::Ui;
+use egui::{RichText, Ui};
 use rss_com_lib::message_body::FeedsFilter;
 use rss_com_lib::rss_feed::FeedInfo;
 use rss_com_lib::Url;
@@ -103,7 +103,15 @@ impl FeedListDisplay {
                         };
 
                         ui.horizontal(|ui| {
-                            ui.label("-");
+                            // TODO (2024-09-03): Deduplicate this and the tagged version of the display.
+                            if info.last_update_went_ok {
+                                ui.label("-");
+                            } else {
+                                // This feed was not available lasts time. Let the user know.
+                                ui.label(RichText::new("?").color(ui.visuals().error_fg_color))
+                                    .on_hover_text("Feed could not be reached on last update.");
+                            }
+
                             ui.horizontal_wrapped(|ui| {
                                 if selectable_value(ui, selected, &info.name) {
                                     self.selection = FeedsFilter::Single(url.clone());
@@ -150,7 +158,14 @@ impl FeedListDisplay {
                             };
 
                             ui.horizontal(|ui| {
-                                ui.label("-");
+                                if info.last_update_went_ok {
+                                    ui.label("-");
+                                } else {
+                                    // This feed was not available lasts time. Let the user know.
+                                    ui.label(RichText::new("?").color(ui.visuals().error_fg_color))
+                                        .on_hover_text("Feed could not be reached on last update.");
+                                }
+
                                 ui.horizontal_wrapped(|ui| {
                                     if selectable_value(ui, selected, &info.name) {
                                         self.selection = FeedsFilter::Single(url.clone());

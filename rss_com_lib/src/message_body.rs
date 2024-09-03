@@ -3,7 +3,7 @@ use crate::Url;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Request format for `/api/is_url_an_rss_feed`
 #[derive(Serialize, Deserialize, Debug)]
@@ -24,7 +24,7 @@ pub struct IsUrlAnRssFeedResponse {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AddFeedRequest {
     pub url: Url,
-    pub info: FeedInfo,
+    pub tags: HashSet<String>,
 }
 
 /// Request for `/api/feeds`

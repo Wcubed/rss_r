@@ -149,6 +149,8 @@ impl RssFeed {
         for (key, entry) in entries.into_iter() {
             self.entries.entry(key).or_insert(entry);
         }
+
+        self.info.last_update_went_ok = true;
     }
 }
 
@@ -189,15 +191,20 @@ pub async fn get_feeds(
                     let update_timeout = core::time::Duration::from_secs(5);
 
                     // This is the call that performs the actual updates.
-                    let feeds = requester.request_feeds(&urls, update_timeout).await;
+                    let mut feeds = requester.request_feeds(&urls, update_timeout).await;
 
                     let mut collections = collections.write().unwrap();
                     if let Some(collection) = collections.get_mut(auth.user_id()) {
-                        for (url, maybe_feed) in feeds {
-                            if let (Some(feed), Ok(update_feed)) =
-                                (collection.get_mut(&url), maybe_feed)
-                            {
-                                feed.update_entries(update_feed.entries);
+                        for url in &urls {
+                            if let Some(feed) = collection.get_mut(url) {
+                                // Feed exists in the users collection.
+                                if let Some(Ok(update_feed)) = feeds.remove(url) {
+                                    // Feed is retrieved ok.
+                                    feed.update_entries(update_feed.entries);
+                                } else {
+                                    // Something went wrong while getting the feed.
+                                    feed.info.last_update_went_ok = false;
+                                }
                             }
                         }
 
@@ -269,10 +276,13 @@ pub async fn add_feed(
                 .request_feed(&request.url, NEW_FEED_REQUEST_TIMEOUT)
                 .await
             {
-                collection.insert(
-                    request.url.clone(),
-                    RssFeed::new(request.info.clone(), new_feed.entries),
-                );
+                let info = FeedInfo {
+                    name: new_feed.title,
+                    tags: request.tags.clone(),
+                    last_update_went_ok: true,
+                };
+
+                collection.insert(request.url.clone(), RssFeed::new(info, new_feed.entries));
             } else {
                 // TODO (Wybe 2022-10-01): Return an error.
             }
@@ -418,6 +428,7 @@ mod tests {
             FeedInfo {
                 name: "Test".to_string(),
                 tags: Default::default(),
+                last_update_went_ok: true,
             },
             Default::default(),
         );

@@ -12,6 +12,8 @@ use std::hash::{Hash, Hasher};
 pub struct FeedInfo {
     pub name: String,
     pub tags: HashSet<String>,
+    /// True if the last time this feed was queried for updates, it was available.
+    pub last_update_went_ok: bool,
 }
 
 impl Hash for FeedInfo {

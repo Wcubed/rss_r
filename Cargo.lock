@@ -3736,7 +3736,7 @@ dependencies = [
 
 [[package]]
 name = "rss_com_lib"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -3749,7 +3749,7 @@ dependencies = [
 
 [[package]]
 name = "rss_r"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "actix-files",
  "actix-identity",
@@ -3772,7 +3772,7 @@ dependencies = [
 
 [[package]]
 name = "rss_r_web"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "chrono",
  "console_error_panic_hook",

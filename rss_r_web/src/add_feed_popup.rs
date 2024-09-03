@@ -4,7 +4,6 @@ use crate::{POPUP_ALIGN, POPUP_OFFSET};
 use egui::{Button, Context, TextEdit, Ui};
 use log::warn;
 use rss_com_lib::message_body::{AddFeedRequest, IsUrlAnRssFeedRequest, IsUrlAnRssFeedResponse};
-use rss_com_lib::rss_feed::FeedInfo;
 use rss_com_lib::Url;
 use std::collections::HashSet;
 
@@ -51,7 +50,6 @@ impl AddFeedPopup {
                                 ui,
                                 requests,
                                 url,
-                                name,
                                 &self.tag_selector,
                             );
                         }
@@ -150,7 +148,6 @@ impl AddFeedPopup {
         ui: &mut Ui,
         requests: &mut Requests,
         feed_url: &Url,
-        feed_name: &str,
         tag_selector: &TagSelector,
     ) {
         if ui
@@ -164,10 +161,7 @@ impl AddFeedPopup {
                 ApiEndpoint::AddFeed,
                 AddFeedRequest {
                     url: feed_url.clone(),
-                    info: FeedInfo {
-                        name: feed_name.to_string(),
-                        tags: tag_selector.get_selected_tags(),
-                    },
+                    tags: tag_selector.get_selected_tags(),
                 },
             );
         }
