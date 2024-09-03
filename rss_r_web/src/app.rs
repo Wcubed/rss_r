@@ -1,14 +1,9 @@
-use std::collections::HashMap;
-
 use crate::login::LoginView;
 use crate::requests::{ApiEndpoint, Requests};
 use crate::rss_collection::RssDisplay;
 use eframe::Frame;
 use egui::{Align2, Context, Ui, Vec2, Visuals};
 use log::info;
-use rss_com_lib::message_body::{ComFeedEntry, FeedsRequest};
-use rss_com_lib::rss_feed::FeedInfo;
-use rss_com_lib::Url;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -155,10 +150,4 @@ fn global_dark_light_mode_switch(ui: &mut Ui) -> Option<bool> {
         return result;
     }
     None
-}
-
-pub struct MainData {
-    feed_info: HashMap<Url, FeedInfo>,
-    /// Feed entries, as received from the server.
-    entries: Vec<ComFeedEntry>,
 }

@@ -10,7 +10,6 @@ use rss_com_lib::message_body::{
 use rss_com_lib::rss_feed::{EntryKey, FeedInfo};
 use rss_com_lib::Url;
 use std::collections::HashMap;
-use std::fmt::format;
 
 const SIDEPANEL_COLLAPSE_WIDTH: f32 = 900.0;
 const DEFAULT_ENTRY_REQUEST_AMOUNT: usize = 30;
@@ -60,7 +59,7 @@ impl RssDisplay {
         let response = self.feeds_display.handle_popups(ctx, requests);
 
         match response {
-            FeedListPopupResponse::None => todo!(),
+            FeedListPopupResponse::None => {} // Nothing to do.
             FeedListPopupResponse::FeedInfoEdited(url, new_info) => {
                 if let Some(feed) = self.feeds_info.get_mut(&url) {
                     *feed = new_info;
@@ -68,19 +67,22 @@ impl RssDisplay {
 
                 self.feeds_display.update_feeds_info(&self.feeds_info);
             }
-            FeedListPopupResponse::FeedAdded => requests.new_request_with_json_body(
-                ApiEndpoint::Feeds,
-                FeedsRequest {
-                    filter: self.feeds_display.current_selection(),
-                    entry_filter: if self.show_unread_entries {
-                        EntryTypeFilter::All
-                    } else {
-                        EntryTypeFilter::Unread
+            FeedListPopupResponse::FeedAdded => {
+                requests.new_request_with_json_body(
+                    ApiEndpoint::Feeds,
+                    FeedsRequest {
+                        filter: self.feeds_display.current_selection(),
+                        entry_filter: if self.show_unread_entries {
+                            EntryTypeFilter::All
+                        } else {
+                            EntryTypeFilter::Unread
+                        },
+                        amount: self.requested_entry_amount,
+                        additional_action: AdditionalAction::IncludeFeedsInfo,
                     },
-                    amount: self.requested_entry_amount,
-                    additional_action: AdditionalAction::IncludeFeedsInfo,
-                },
-            ),
+                );
+                self.available_entry_amount = 0;
+            }
         }
     }
 
@@ -122,7 +124,8 @@ impl RssDisplay {
                         amount: self.requested_entry_amount,
                         additional_action: AdditionalAction::None,
                     },
-                )
+                );
+                self.available_entry_amount = 0;
             }
 
             if ui.button("Update all feeds").clicked() {
@@ -194,7 +197,8 @@ impl RssDisplay {
                 amount: DEFAULT_ENTRY_REQUEST_AMOUNT,
                 additional_action: AdditionalAction::None,
             },
-        )
+        );
+        self.available_entry_amount = 0;
     }
 
     pub fn show_feed_entries(&mut self, ui: &mut Ui, requests: &mut Requests) {
@@ -206,6 +210,7 @@ impl RssDisplay {
                     if let Ok(feeds_response) = serde_json::from_str::<FeedsResponse>(&body) {
                         if let Some(feeds_info) = feeds_response.feeds_info {
                             self.feeds_info = feeds_info;
+                            self.feeds_display.update_feeds_info(&self.feeds_info);
                         }
 
                         self.available_entry_amount = feeds_response.total_available;
