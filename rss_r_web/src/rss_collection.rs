@@ -26,7 +26,7 @@ pub struct RssDisplay {
     /// How many feed entries are available on the server.
     available_entry_amount: usize,
     /// Whether or not to request feed entries that have already been read.
-    show_unread_entries: bool,
+    show_read_entries: bool,
     /// Whether to show the side panel with the feed list or not.
     open_sidepanel: bool,
     /// Previous size of the web page
@@ -45,7 +45,7 @@ impl RssDisplay {
             feed_entries: vec![],
             requested_entry_amount: DEFAULT_ENTRY_REQUEST_AMOUNT,
             available_entry_amount: 0,
-            show_unread_entries: false,
+            show_read_entries: false,
             open_sidepanel,
             previous_page_size: page_size,
         }
@@ -72,10 +72,10 @@ impl RssDisplay {
                     ApiEndpoint::Feeds,
                     FeedsRequest {
                         filter: self.feeds_display.current_selection(),
-                        entry_filter: if self.show_unread_entries {
+                        entry_filter: if self.show_read_entries {
                             EntryTypeFilter::All
                         } else {
-                            EntryTypeFilter::Unread
+                            EntryTypeFilter::UnreadOnly
                         },
                         amount: self.requested_entry_amount,
                         additional_action: AdditionalAction::IncludeFeedsInfo,
@@ -108,18 +108,18 @@ impl RssDisplay {
         }
 
         egui::SidePanel::left("side-panel").show(ctx, |ui| {
-            let last_show_read_entries = self.show_unread_entries;
-            ui.checkbox(&mut self.show_unread_entries, "Show read entries");
+            let last_show_read_entries = self.show_read_entries;
+            ui.checkbox(&mut self.show_read_entries, "Show read entries");
 
-            if last_show_read_entries != self.show_unread_entries {
+            if last_show_read_entries != self.show_read_entries {
                 requests.new_request_with_json_body(
                     ApiEndpoint::Feeds,
                     FeedsRequest {
                         filter: self.feeds_display.current_selection(),
-                        entry_filter: if self.show_unread_entries {
+                        entry_filter: if self.show_read_entries {
                             EntryTypeFilter::All
                         } else {
-                            EntryTypeFilter::Unread
+                            EntryTypeFilter::UnreadOnly
                         },
                         amount: self.requested_entry_amount,
                         additional_action: AdditionalAction::None,
@@ -133,10 +133,10 @@ impl RssDisplay {
                     ApiEndpoint::Feeds,
                     FeedsRequest {
                         filter: self.feeds_display.current_selection(),
-                        entry_filter: if self.show_unread_entries {
+                        entry_filter: if self.show_read_entries {
                             EntryTypeFilter::All
                         } else {
-                            EntryTypeFilter::Unread
+                            EntryTypeFilter::UnreadOnly
                         },
                         amount: self.requested_entry_amount,
                         additional_action: AdditionalAction::UpdateFeeds,
@@ -168,10 +168,10 @@ impl RssDisplay {
                     ApiEndpoint::Feeds,
                     FeedsRequest {
                         filter: self.feeds_display.current_selection(),
-                        entry_filter: if self.show_unread_entries {
+                        entry_filter: if self.show_read_entries {
                             EntryTypeFilter::All
                         } else {
-                            EntryTypeFilter::Unread
+                            EntryTypeFilter::UnreadOnly
                         },
                         amount: self.feed_entries.len() + DEFAULT_ENTRY_REQUEST_AMOUNT,
                         additional_action: AdditionalAction::None,
@@ -189,10 +189,10 @@ impl RssDisplay {
             ApiEndpoint::Feeds,
             FeedsRequest {
                 filter: self.feeds_display.current_selection(),
-                entry_filter: if self.show_unread_entries {
+                entry_filter: if self.show_read_entries {
                     EntryTypeFilter::All
                 } else {
-                    EntryTypeFilter::Unread
+                    EntryTypeFilter::UnreadOnly
                 },
                 amount: DEFAULT_ENTRY_REQUEST_AMOUNT,
                 additional_action: AdditionalAction::None,
@@ -246,7 +246,7 @@ impl RssDisplay {
                         .take()
                     {
                         // If we are not displaying unread entries, we should remove it. Otherwise update it.
-                        if !self.show_unread_entries && !response.read {
+                        if !self.show_read_entries && response.read {
                             self.feed_entries.remove(index);
                             // If we have removed the entry from this view, there will be one less entry available from the server
                             // if we were to re-request the view.
@@ -362,10 +362,10 @@ impl RssDisplay {
             ApiEndpoint::Feeds,
             FeedsRequest {
                 filter: self.feeds_display.current_selection(),
-                entry_filter: if self.show_unread_entries {
+                entry_filter: if self.show_read_entries {
                     EntryTypeFilter::All
                 } else {
-                    EntryTypeFilter::Unread
+                    EntryTypeFilter::UnreadOnly
                 },
                 amount: DEFAULT_ENTRY_REQUEST_AMOUNT,
                 additional_action: AdditionalAction::IncludeFeedsInfo,

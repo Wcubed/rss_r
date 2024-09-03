@@ -49,14 +49,14 @@ pub enum FeedsFilter {
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum EntryTypeFilter {
     All,
-    Unread,
+    UnreadOnly,
 }
 
 impl EntryTypeFilter {
     pub fn apply(&self, entry: &FeedEntry) -> bool {
         match self {
             EntryTypeFilter::All => true,
-            EntryTypeFilter::Unread => !entry.read,
+            EntryTypeFilter::UnreadOnly => !entry.read,
         }
     }
 }
