@@ -1,7 +1,10 @@
-use crate::rss_feed::{EntryKey, FeedEntries, FeedInfo};
+use crate::rss_feed::{EntryKey, FeedEntry, FeedInfo};
 use crate::Url;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::default;
 
 /// Request format for `/api/is_url_an_rss_feed`
 #[derive(Serialize, Deserialize, Debug)]
@@ -25,29 +28,128 @@ pub struct AddFeedRequest {
     pub info: FeedInfo,
 }
 
-/// Response for `/api/list_feeds`
+/// Request for `/api/feeds`
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ListFeedsResponse {
-    pub feeds: HashMap<Url, FeedInfo>,
+pub struct FeedsRequest {
+    /// What feeds to return.
+    pub filter: FeedsFilter,
+    pub entry_filter: EntryTypeFilter,
+    /// How many entries to return.
+    pub amount: usize,
+    pub additional_action: AdditionalAction,
 }
 
-/// Request for `/api/get_feed_entries`
-#[derive(Serialize, Deserialize, Debug)]
-pub struct GetFeedEntriesRequest {
-    /// Urls of the feeds to retrieve.
-    pub feeds: HashSet<Url>,
-    /// Whether the server should first try to check for updates, before sending the feeds to the client.
-    pub refresh: bool,
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
+pub enum FeedsFilter {
+    #[default]
+    All,
+    Tag(String),
+    Single(Url),
 }
 
-/// Response for `/api/get_feed_entries`
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub enum EntryTypeFilter {
+    All,
+    Unread,
+}
+
+impl EntryTypeFilter {
+    pub fn apply(&self, entry: &FeedEntry) -> bool {
+        match self {
+            EntryTypeFilter::All => true,
+            EntryTypeFilter::Unread => !entry.read,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
-pub struct GetFeedEntriesResponse {
-    /// Hashmap of
-    /// <Feed url -> Feed>
-    /// If the request contained any urls that are not in the user's collection, they will not
-    /// be listed in the response.
-    pub results: HashMap<Url, (FeedInfo, FeedEntries)>,
+pub enum AdditionalAction {
+    None,
+    /// Send along an update of all the feeds info.
+    IncludeFeedsInfo,
+    /// Update all the feeds, and send along an update of the feeds info.
+    /// A request with this might take a while.
+    UpdateFeeds,
+}
+
+/// Response for `/api/feeds`
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FeedsResponse {
+    /// Requested feed entries, ordered by time. Contains maximum [`FeedsRequest`] `.amount` entries.
+    pub feed_entries: Vec<ComFeedEntry>,
+    /// How many items were available for the given request.
+    pub total_available: usize,
+    /// If the request included [`AdditionalAction::IncludeFeedsInfo`] or [`AdditionalAction::UpdateFeeds`],
+    /// this will be filled in. Otherwise it will be [`None`].
+    pub feeds_info: Option<HashMap<Url, FeedInfo>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct ComFeedEntry {
+    /// Reference key to this specific entry.
+    pub key: EntryKey,
+    /// The feed this entry belongs to.
+    pub feed_url: Url,
+    pub title: String,
+    /// Link to the original content.
+    pub link: Option<Url>,
+    /// If an rss feed includes an entry with no date, it will get a default date in the past.
+    pub pub_date: DateTime<Utc>,
+    pub read: bool,
+}
+
+impl ComFeedEntry {
+    pub fn new(feed_url: Url, key: EntryKey, entry: &FeedEntry) -> Self {
+        Self {
+            key,
+            feed_url,
+            title: entry.title.clone(),
+            link: entry.link.clone(),
+            pub_date: entry.pub_date,
+            read: entry.read,
+        }
+    }
+}
+
+impl PartialOrd for ComFeedEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ComFeedEntry {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Normally one would compare self to other.
+        // However, the FeedEntries should be sorted with newest first,
+        // so for the date we compare the other with self.
+        let mut ord = other.pub_date.cmp(&self.pub_date);
+
+        if ord != Ordering::Equal {
+            return ord;
+        }
+
+        ord = self.title.cmp(&other.title);
+        if ord != Ordering::Equal {
+            return ord;
+        }
+
+        ord = self.link.cmp(&other.link);
+        if ord != Ordering::Equal {
+            return ord;
+        }
+
+        ord = self.read.cmp(&other.read);
+        if ord != Ordering::Equal {
+            return ord;
+        }
+
+        ord = self.key.cmp(&other.key);
+        if ord != Ordering::Equal {
+            return ord;
+        }
+
+        ord
+    }
 }
 
 /// Request and response for `/api/set_entry_read`

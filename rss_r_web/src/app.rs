@@ -1,9 +1,14 @@
+use std::collections::HashMap;
+
 use crate::login::LoginView;
 use crate::requests::{ApiEndpoint, Requests};
-use crate::rss_collection::RssCollection;
+use crate::rss_collection::RssDisplay;
 use eframe::Frame;
 use egui::{Align2, Context, Ui, Vec2, Visuals};
 use log::info;
+use rss_com_lib::message_body::{ComFeedEntry, FeedsRequest};
+use rss_com_lib::rss_feed::FeedInfo;
+use rss_com_lib::Url;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -32,7 +37,6 @@ impl RssApp {
 
         RssApp {
             config,
-            // TODO (Wybe 2022-07-10): Maybe make some kind of page system, where you can switch between pages, and don't need to keep each page in a different variable.
             requests: Requests::new(cc.egui_ctx.clone()),
             active_view: ActiveView::Login(LoginView::default()),
             version_string: format!("v{}", VERSION),
@@ -70,6 +74,10 @@ impl eframe::App for RssApp {
                     self.requests.new_request_without_body(ApiEndpoint::Logout)
                 }
 
+                if let ActiveView::RssCollection(collection) = &mut self.active_view {
+                    collection.show_entry_amount_display(ui, &mut self.requests);
+                }
+
                 ui.separator();
 
                 if let Some(dark_mode) = global_dark_light_mode_switch(ui) {
@@ -83,6 +91,7 @@ impl eframe::App for RssApp {
 
         if let ActiveView::RssCollection(collection) = &mut self.active_view {
             collection.show_feed_list(ctx, &mut self.requests);
+            collection.handle_popups(ctx, &mut self.requests)
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -104,11 +113,10 @@ impl eframe::App for RssApp {
 
         if logged_in {
             self.requests.set_authenticated(true);
-            self.active_view = ActiveView::RssCollection(Box::new(RssCollection::new(ctx)));
+            let new_display = RssDisplay::new(ctx);
+            new_display.on_login(&mut self.requests);
 
-            // Request the available feeds.
-            self.requests
-                .new_request_without_body(ApiEndpoint::ListFeeds);
+            self.active_view = ActiveView::RssCollection(Box::new(new_display));
         }
     }
 
@@ -121,7 +129,7 @@ impl eframe::App for RssApp {
 
 enum ActiveView {
     Login(LoginView),
-    RssCollection(Box<RssCollection>),
+    RssCollection(Box<RssDisplay>),
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -147,4 +155,10 @@ fn global_dark_light_mode_switch(ui: &mut Ui) -> Option<bool> {
         return result;
     }
     None
+}
+
+pub struct MainData {
+    feed_info: HashMap<Url, FeedInfo>,
+    /// Feed entries, as received from the server.
+    entries: Vec<ComFeedEntry>,
 }

@@ -4,6 +4,7 @@
 mod add_feed_popup;
 mod app;
 mod edit_feed_popup;
+mod feed_list_display;
 mod hyperlink;
 mod login;
 mod requests;

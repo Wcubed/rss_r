@@ -135,9 +135,8 @@ pub enum ApiEndpoint {
     Logout,
     IsUrlAnRssFeed,
     AddFeed,
-    ListFeeds,
-    /// Get all the entries in the requested feeds.
-    GetFeedEntries,
+    /// List feeds and their entries.
+    Feeds,
     SetEntryRead,
     SetFeedInfo,
 }
@@ -156,8 +155,7 @@ impl ApiEndpoint {
             Self::Logout => "logout",
             Self::IsUrlAnRssFeed => "is_url_an_rss_feed",
             Self::AddFeed => "add_feed",
-            Self::ListFeeds => "list_feeds",
-            Self::GetFeedEntries => "get_feed_entries",
+            Self::Feeds => "feeds",
             Self::SetEntryRead => "set_entry_read",
             Self::SetFeedInfo => "set_feed_info",
         };

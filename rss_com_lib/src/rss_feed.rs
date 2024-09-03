@@ -75,7 +75,7 @@ impl IntoIterator for FeedEntries {
 /// The value is generated using the [blake3::Hasher].
 ///
 /// TODO (Wybe 2022-09-24): Serialize and deserialize as base64? https://github.com/serde-rs/serde/issues/661
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct EntryKey([u8; 32]);
 
 impl EntryKey {
@@ -170,31 +170,6 @@ impl FeedEntry {
         };
         let key = EntryKey::from_entry(&entry);
         (key, entry)
-    }
-}
-
-impl PartialOrd for FeedEntry {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for FeedEntry {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // Normally one would compare self to other.
-        // However, the FeedEntries should be sorted with newest first,
-        // so we compare the other with self.
-        let mut ord = other.pub_date.cmp(&self.pub_date);
-
-        if ord == Ordering::Equal {
-            ord = self.title.cmp(&other.title);
-        }
-
-        if ord == Ordering::Equal {
-            ord = self.link.cmp(&other.link);
-        }
-
-        ord
     }
 }
 

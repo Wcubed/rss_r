@@ -7,7 +7,7 @@ pub mod rss_feed;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
-/// Http headers should not have underscores, proxies like nginx ignore them by default.
+/// Note: Http headers should not have underscores, proxies like nginx ignore them by default.
 pub const USER_ID_HEADER: &str = "userid";
 pub const PASSWORD_HEADER: &str = "userpass";
 

@@ -3,8 +3,8 @@ use crate::{Authenticated, FeedRequester, SaveInRonFile};
 use actix_web::{post, web, HttpResponse, Responder};
 use log::info;
 use rss_com_lib::message_body::{
-    AddFeedRequest, GetFeedEntriesRequest, GetFeedEntriesResponse, IsUrlAnRssFeedRequest,
-    IsUrlAnRssFeedResponse, ListFeedsResponse, SetEntryReadRequestAndResponse,
+    AddFeedRequest, AdditionalAction, ComFeedEntry, EntryTypeFilter, FeedsFilter, FeedsRequest,
+    FeedsResponse, IsUrlAnRssFeedRequest, IsUrlAnRssFeedResponse, SetEntryReadRequestAndResponse,
     SetFeedInfoRequestAndResponse,
 };
 use rss_com_lib::rss_feed::{FeedEntries, FeedInfo};
@@ -52,6 +52,55 @@ impl std::ops::DerefMut for RssCollections {
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct RssCollection(HashMap<Url, RssFeed>);
+
+impl RssCollection {
+    /// Returns the entries, and how many there were in total.
+    fn get_sorted_com_entries_with_filter(
+        &self,
+        amount: usize,
+        feed_filter: FeedsFilter,
+        entry_filter: EntryTypeFilter,
+    ) -> (Vec<ComFeedEntry>, usize) {
+        let mut entries: Vec<ComFeedEntry> = match feed_filter {
+            FeedsFilter::All => self
+                .iter()
+                .flat_map(|(url, feed)| {
+                    feed.entries
+                        .iter()
+                        .filter(|(_, entry)| entry_filter.apply(entry))
+                        .map(|(key, entry)| ComFeedEntry::new(url.clone(), key.clone(), entry))
+                })
+                .collect(),
+            FeedsFilter::Tag(tag) => self
+                .iter()
+                .filter(|(_, feed)| feed.info.tags.contains(&tag))
+                .flat_map(|(url, feed)| {
+                    feed.entries
+                        .iter()
+                        .filter(|(_, entry)| entry_filter.apply(entry))
+                        .map(|(key, entry)| ComFeedEntry::new(url.clone(), key.clone(), entry))
+                })
+                .collect(),
+            FeedsFilter::Single(url) => {
+                if let Some(feed) = self.get(&url) {
+                    feed.entries
+                        .iter()
+                        .filter(|(_, entry)| entry_filter.apply(entry))
+                        .map(|(key, entry)| ComFeedEntry::new(url.clone(), key.clone(), entry))
+                        .collect()
+                } else {
+                    vec![]
+                }
+            }
+        };
+
+        entries.sort();
+        let total = entries.len();
+
+        entries.truncate(amount);
+        (entries, total)
+    }
+}
 
 impl Hash for RssCollection {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -103,77 +152,84 @@ impl RssFeed {
     }
 }
 
-/// Returns a list of all feeds in a users collection.
-#[post("/list_feeds")]
-pub async fn list_feeds(
-    auth: Authenticated,
-    collections: web::Data<RssCollections>,
-) -> impl Responder {
-    let collections = collections.read().unwrap();
-
-    let feeds = if let Some(collection) = collections.get(auth.user_id()) {
-        collection
-            .iter()
-            .map(|(key, feed)| (key.clone(), feed.info.clone()))
-            .collect()
-    } else {
-        HashMap::new()
-    };
-
-    HttpResponse::Ok().json(ListFeedsResponse { feeds })
-}
-
-#[post("/get_feed_entries")]
-pub async fn get_feed_entries(
-    request: web::Json<GetFeedEntriesRequest>,
+#[post("/feeds")]
+pub async fn get_feeds(
+    request: web::Json<FeedsRequest>,
     auth: Authenticated,
     collections: web::Data<RssCollections>,
     requester: web::Data<FeedRequester>,
 ) -> impl Responder {
     let result = {
-        if request.refresh {
-            let mut collections = collections.write().unwrap();
+        let feeds_info = match request.additional_action {
+            AdditionalAction::None => None,
+            AdditionalAction::IncludeFeedsInfo => {
+                let collections = collections.read().unwrap();
+                collections.get(auth.user_id()).map(|collection| {
+                    collection
+                        .iter()
+                        .map(|(key, feed)| (key.clone(), feed.info.clone()))
+                        .collect()
+                })
+            }
+            AdditionalAction::UpdateFeeds => {
+                // Update all url's
+                // We collect the urls to be updated separately from the update:
+                // Because according to clippy, it is not a good idea to hold a mutex lock across an `await`.
+                let maybe_urls = {
+                    let collections = collections.read().unwrap();
 
-            info!(
-                "User requested refresh of feeds. Downloading {} feeds.",
-                request.feeds.len()
-            );
+                    info!("User {} requested refresh of feeds.", auth.user_name());
 
-            // Update the listed feeds.
-            if let Some(collection) = collections.get_mut(auth.user_id()) {
-                let update_timeout = core::time::Duration::from_secs(5);
-                let feeds = requester
-                    .request_feeds(&request.feeds, update_timeout)
-                    .await;
+                    collections
+                        .get(auth.user_id())
+                        .map(|collection| collection.iter().map(|(url, _)| url.clone()).collect())
+                };
 
-                for (url, maybe_feed) in feeds {
-                    if let (Some(feed), Ok(update_feed)) = (collection.get_mut(&url), maybe_feed) {
-                        feed.update_entries(update_feed.entries);
+                if let Some(urls) = maybe_urls {
+                    let update_timeout = core::time::Duration::from_secs(5);
+
+                    // This is the call that performs the actual updates.
+                    let feeds = requester.request_feeds(&urls, update_timeout).await;
+
+                    let mut collections = collections.write().unwrap();
+                    if let Some(collection) = collections.get_mut(auth.user_id()) {
+                        for (url, maybe_feed) in feeds {
+                            if let (Some(feed), Ok(update_feed)) =
+                                (collection.get_mut(&url), maybe_feed)
+                            {
+                                feed.update_entries(update_feed.entries);
+                            }
+                        }
+
+                        Some(
+                            collection
+                                .iter()
+                                .map(|(key, feed)| (key.clone(), feed.info.clone()))
+                                .collect(),
+                        )
+                    } else {
+                        None
                     }
+                } else {
+                    None
                 }
             }
-        }
+        };
 
         let collections = collections.read().unwrap();
 
         if let Some(collection) = collections.get(auth.user_id()) {
-            // TODO (Wybe 2022-10-01): Implement the "refresh" option on the request.
-            let mut results_map = HashMap::new();
+            let (entries, total) = collection.get_sorted_com_entries_with_filter(
+                request.amount,
+                request.filter.clone(),
+                request.entry_filter,
+            );
 
-            for url in &request.feeds {
-                if let Some(feed) = collection.get(url) {
-                    results_map.insert(url.clone(), (feed.info.clone(), feed.entries.clone()));
-                }
-            }
-
-            if results_map.is_empty() {
-                // An empty map means the user requested only feeds that they don't have in the collection.
-                HttpResponse::Unauthorized().finish()
-            } else {
-                HttpResponse::Ok().json(GetFeedEntriesResponse {
-                    results: results_map,
-                })
-            }
+            HttpResponse::Ok().json(FeedsResponse {
+                feed_entries: entries,
+                total_available: total,
+                feeds_info,
+            })
         } else {
             HttpResponse::Forbidden().finish()
         }
@@ -198,6 +254,7 @@ pub async fn add_feed(
     );
 
     {
+        // TODO (2024-08-21): Don't hold the collections mutex accross the await point.
         let mut collections = collections.write().unwrap();
         let collection = if let Some(collection) = collections.get_mut(auth.user_id()) {
             collection
