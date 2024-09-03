@@ -38,6 +38,8 @@ impl FeedListDisplay {
                     .entry(tag.clone())
                     .and_modify(|by_tag| by_tag.push((url.clone(), info.clone())))
                     .or_insert_with(|| vec![(url.clone(), info.clone())]);
+
+                self.known_tags.insert(tag.clone());
             }
 
             if info.tags.is_empty() {
