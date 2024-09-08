@@ -1,5 +1,5 @@
 use crate::users::UserId;
-use crate::{Authenticated, FeedRequester, SaveInRonFile};
+use crate::{full_error_to_string, Authenticated, FeedRequester, SaveInRonFile};
 use actix_web::{post, web, HttpResponse, Responder};
 use log::info;
 use rss_com_lib::message_body::{
@@ -210,7 +210,7 @@ pub async fn get_feeds(
                                 if let Some(maybe_feed_update) = feeds.remove(url) {
                                     let maybe_entries = maybe_feed_update
                                         .map(|feed| feed.entries)
-                                        .map_err(|error| error.to_string());
+                                        .map_err(|error| full_error_to_string(&error));
                                     feed.update_entries(maybe_entries);
                                 } else {
                                     // Feed is in the users collection, but the update request did not return a result.

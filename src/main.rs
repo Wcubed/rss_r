@@ -210,7 +210,7 @@ async fn update_all_collections(
                         let maybe_entries = maybe_feed_update
                             .as_ref()
                             .map(|feed| feed.entries.clone())
-                            .map_err(|error| error.to_string());
+                            .map_err(full_error_to_string);
                         feed.update_entries(maybe_entries);
                     } else {
                         // Feed is in the users collection, but the update request did not return a result.
@@ -266,4 +266,21 @@ fn configure_logging() {
 
     // We log both to the terminal, and to a file.
     CombinedLogger::init(vec![term_logger, file_logger]).unwrap();
+}
+
+/// Prints the error to string, including any `source` errors available.
+///
+/// We allow the clippy borrowed_box lint here, because we actually cannot follow it's advice of passing `&dyn Error`, because this causes a
+/// "type is not sized" at the call site of this function..
+#[allow(clippy::borrowed_box)]
+pub fn full_error_to_string(error: &Box<dyn std::error::Error>) -> String {
+    let mut message = error.to_string();
+
+    let mut maybe_source = error.source();
+    while let Some(source) = maybe_source {
+        message.push_str(&format!("\nCaused by: {}", source));
+        maybe_source = source.source();
+    }
+
+    message
 }
