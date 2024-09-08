@@ -93,44 +93,18 @@ impl FeedListDisplay {
                 response = FeedListDisplayResponse::SelectionChanged;
             }
 
-            // TODO (Wybe 2022-09-27): Deduplicate code.
             if !self.feeds_without_tags.is_empty() {
                 ui.collapsing("Untagged", |ui| {
                     for (url, info) in self.feeds_without_tags.iter() {
-                        let selected = match &self.selection {
-                            FeedsFilter::Single(selected_url) => selected_url == url,
-                            _ => false,
-                        };
-
-                        ui.horizontal(|ui| {
-                            // TODO (2024-09-03): Deduplicate this and the tagged version of the display.
-                            if info.last_update_went_ok {
-                                ui.label("-");
-                            } else {
-                                // This feed was not available lasts time. Let the user know.
-                                ui.label(RichText::new("?").color(ui.visuals().error_fg_color))
-                                    .on_hover_text("Feed could not be reached on last update.");
-                            }
-
-                            ui.horizontal_wrapped(|ui| {
-                                if selectable_value(ui, selected, &info.name) {
-                                    self.selection = FeedsFilter::Single(url.clone());
-                                    response = FeedListDisplayResponse::SelectionChanged;
-                                }
-
-                                // Only show the edit buton if the feed is selected.
-                                if selected
-                                    && ui.button("Edit").clicked()
-                                    && self.edit_feed_popup.is_none()
-                                {
-                                    self.edit_feed_popup = Some(EditFeedPopup::new(
-                                        url.clone(),
-                                        info.clone(),
-                                        self.known_tags.clone(),
-                                    ));
-                                }
-                            });
-                        });
+                        feed_info_display(
+                            ui,
+                            url,
+                            info,
+                            &mut response,
+                            &mut self.selection,
+                            &mut self.edit_feed_popup,
+                            &self.known_tags,
+                        );
                     }
                 });
             }
@@ -152,39 +126,15 @@ impl FeedListDisplay {
                     })
                     .body(|ui| {
                         for (url, info) in feeds {
-                            let selected = match &self.selection {
-                                FeedsFilter::Single(selected_url) => selected_url == url,
-                                _ => false,
-                            };
-
-                            ui.horizontal(|ui| {
-                                if info.last_update_went_ok {
-                                    ui.label("-");
-                                } else {
-                                    // This feed was not available lasts time. Let the user know.
-                                    ui.label(RichText::new("?").color(ui.visuals().error_fg_color))
-                                        .on_hover_text("Feed could not be reached on last update.");
-                                }
-
-                                ui.horizontal_wrapped(|ui| {
-                                    if selectable_value(ui, selected, &info.name) {
-                                        self.selection = FeedsFilter::Single(url.clone());
-                                        response = FeedListDisplayResponse::SelectionChanged;
-                                    }
-
-                                    // Only show the edit buton if the feed is selected.
-                                    if selected
-                                        && ui.button("Edit").clicked()
-                                        && self.edit_feed_popup.is_none()
-                                    {
-                                        self.edit_feed_popup = Some(EditFeedPopup::new(
-                                            url.clone(),
-                                            info.clone(),
-                                            self.known_tags.clone(),
-                                        ));
-                                    }
-                                });
-                            });
+                            feed_info_display(
+                                ui,
+                                url,
+                                info,
+                                &mut response,
+                                &mut self.selection,
+                                &mut self.edit_feed_popup,
+                                &self.known_tags,
+                            );
                         }
                     });
             }
@@ -232,6 +182,49 @@ impl FeedListDisplay {
 
         response
     }
+}
+
+fn feed_info_display(
+    ui: &mut Ui,
+    feed_url: &Url,
+    info: &FeedInfo,
+    response: &mut FeedListDisplayResponse,
+    selection: &mut FeedsFilter,
+    edit_feed_popup: &mut Option<EditFeedPopup>,
+    known_tags: &HashSet<String>,
+) {
+    let selected = match selection {
+        FeedsFilter::Single(selected_url) => selected_url == feed_url,
+        _ => false,
+    };
+
+    ui.horizontal(|ui| {
+        match &info.last_update_result {
+            Ok(()) => {
+                ui.label("-");
+            }
+            Err(message) => {
+                ui.label(RichText::new("?").color(ui.visuals().error_fg_color))
+                    .on_hover_text(message);
+            }
+        }
+
+        ui.horizontal_wrapped(|ui| {
+            if selectable_value(ui, selected, &info.name) {
+                *selection = FeedsFilter::Single(feed_url.clone());
+                *response = FeedListDisplayResponse::SelectionChanged;
+            }
+
+            // Only show the edit buton if the feed is selected.
+            if selected && ui.button("Edit").clicked() && edit_feed_popup.is_none() {
+                *edit_feed_popup = Some(EditFeedPopup::new(
+                    feed_url.clone(),
+                    info.clone(),
+                    known_tags.clone(),
+                ));
+            }
+        });
+    });
 }
 
 pub enum FeedListDisplayResponse {

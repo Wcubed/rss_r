@@ -144,13 +144,19 @@ impl RssFeed {
 
     /// Checks if any of the given entries are new, and updates the feed with them.
     /// Leaves any existing entries as-is.
-    pub fn update_entries(&mut self, entries: FeedEntries) {
-        // TODO (Wybe 2022-09-25): Write a test for this.
-        for (key, entry) in entries.into_iter() {
-            self.entries.entry(key).or_insert(entry);
-        }
+    pub fn update_entries(&mut self, maybe_entries: Result<FeedEntries, String>) {
+        match maybe_entries {
+            Ok(entries) => {
+                for (key, entry) in entries.into_iter() {
+                    self.entries.entry(key).or_insert(entry);
+                }
 
-        self.info.last_update_went_ok = true;
+                self.info.last_update_result = Ok(());
+            }
+            Err(error) => {
+                self.info.last_update_result = Err(error);
+            }
+        }
     }
 }
 
@@ -191,6 +197,9 @@ pub async fn get_feeds(
                     let update_timeout = core::time::Duration::from_secs(5);
 
                     // This is the call that performs the actual updates.
+                    // TODO (2024-09-03): On the raspberry pi there are too many requests that go wrong, that go ok the next time I try.
+                    //                    This does not happen when I test this locally on my laptop. Then only the feeds that don't exist get a red question mark.
+                    //                    What are the errors that happen, and why?
                     let mut feeds = requester.request_feeds(&urls, update_timeout).await;
 
                     let mut collections = collections.write().unwrap();
@@ -198,12 +207,14 @@ pub async fn get_feeds(
                         for url in &urls {
                             if let Some(feed) = collection.get_mut(url) {
                                 // Feed exists in the users collection.
-                                if let Some(Ok(update_feed)) = feeds.remove(url) {
-                                    // Feed is retrieved ok.
-                                    feed.update_entries(update_feed.entries);
+                                if let Some(maybe_feed_update) = feeds.remove(url) {
+                                    let maybe_entries = maybe_feed_update
+                                        .map(|feed| feed.entries)
+                                        .map_err(|error| error.to_string());
+                                    feed.update_entries(maybe_entries);
                                 } else {
-                                    // Something went wrong while getting the feed.
-                                    feed.info.last_update_went_ok = false;
+                                    // Feed is in the users collection, but the update request did not return a result.
+                                    feed.update_entries(Err("Feed update was requested, but the function did not return anything.".to_string()));
                                 }
                             }
                         }
@@ -279,7 +290,7 @@ pub async fn add_feed(
                 let info = FeedInfo {
                     name: new_feed.title,
                     tags: request.tags.clone(),
-                    last_update_went_ok: true,
+                    last_update_result: Ok(()),
                 };
 
                 collection.insert(request.url.clone(), RssFeed::new(info, new_feed.entries));
@@ -428,7 +439,7 @@ mod tests {
             FeedInfo {
                 name: "Test".to_string(),
                 tags: Default::default(),
-                last_update_went_ok: true,
+                last_update_result: Ok(()),
             },
             Default::default(),
         );
@@ -460,7 +471,7 @@ mod tests {
         update_entries.insert(key_2, entry_2);
 
         // When
-        feed.update_entries(update_entries);
+        feed.update_entries(Ok(update_entries));
 
         // Then
         // entry_1 is still in the feed.

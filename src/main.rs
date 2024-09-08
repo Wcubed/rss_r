@@ -196,14 +196,29 @@ async fn update_all_collections(
     } // Lock on `RssCollections` is dropped here, so that it isn't held while the http requests are made (which can take quite a while).
 
     let feed_requests = requester.request_feeds(&feed_urls, timeout).await;
+    // TODO (2024-09-03): Set the "last update went ok" flag to false if we can't get the feed.
+    // TODO (2024-09-03): Merge this code with the "update all feeds" requests.
 
     {
         let mut collections = collections.write().unwrap();
 
         for (_, collection) in collections.iter_mut() {
-            for (url, feed) in collection.iter_mut() {
-                if let Some(Ok(update_feed)) = feed_requests.get(url) {
-                    feed.update_entries(update_feed.entries.clone());
+            for url in &feed_urls {
+                if let Some(feed) = collection.get_mut(url) {
+                    // Feed exists in the users collection.
+                    if let Some(maybe_feed_update) = feed_requests.get(url) {
+                        let maybe_entries = maybe_feed_update
+                            .as_ref()
+                            .map(|feed| feed.entries.clone())
+                            .map_err(|error| error.to_string());
+                        feed.update_entries(maybe_entries);
+                    } else {
+                        // Feed is in the users collection, but the update request did not return a result.
+                        feed.update_entries(Err(
+                            "Feed update was requested, but the function did not return anything."
+                                .to_string(),
+                        ));
+                    }
                 }
             }
         }

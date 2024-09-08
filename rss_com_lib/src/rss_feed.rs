@@ -7,13 +7,24 @@ use std::collections::{hash_map, HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 #[serde(default)]
 pub struct FeedInfo {
     pub name: String,
     pub tags: HashSet<String>,
-    /// True if the last time this feed was queried for updates, it was available.
-    pub last_update_went_ok: bool,
+    /// If the last update went wrong, this contains the reason.
+    pub last_update_result: Result<(), String>,
+}
+
+impl Default for FeedInfo {
+    fn default() -> Self {
+        Self {
+            name: Default::default(),
+            tags: Default::default(),
+            // This message should never be visible for the user, because new feeds have to be updated once on-add to get the needed info.
+            last_update_result: Err("Feed not yet updated for the first time".to_string()),
+        }
+    }
 }
 
 impl Hash for FeedInfo {
