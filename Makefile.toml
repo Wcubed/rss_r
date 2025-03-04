@@ -1,6 +1,6 @@
 [env]
 # Raspberry 2/3/4
-RASPI_TARGET_TRIPLE = "armv7-unknown-linux-gnueabihf"
+RASPI_TARGET_TRIPLE = "aarch64-unknown-linux-gnu"
 TARGET_DIR = "${CARGO_MAKE_CRATE_TARGET_DIRECTORY}"
 # TODO (Wybe 2022-10-15): Replace dots with dashes in version number.
 PACKAGE_NAME = "rss_r_raspi_${CARGO_MAKE_CRATE_VERSION}"

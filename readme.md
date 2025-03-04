@@ -34,6 +34,7 @@ feat: Added unicorns to the UI.
 - Run `rss_r`.
 
 TODO (Wybe 2022-09-27): For deployment on the raspberry pi think about the following
+  - [ ] Put the "update all feeds" button in the top bar.
   - [ ] Add a way for the frontend and the backend to check if they have the same `rss_com_lib` version. That way they can check if they can reliably communicate.
   - [x] Print the backend version on startup.
   - [x] Show the frontend version somewhere on the ui.
