@@ -128,22 +128,6 @@ impl RssDisplay {
                 self.available_entry_amount = 0;
             }
 
-            if ui.button("Update all feeds").clicked() {
-                requests.new_request_with_json_body(
-                    ApiEndpoint::Feeds,
-                    FeedsRequest {
-                        filter: self.feeds_display.current_selection(),
-                        entry_filter: if self.show_read_entries {
-                            EntryTypeFilter::All
-                        } else {
-                            EntryTypeFilter::UnreadOnly
-                        },
-                        amount: self.requested_entry_amount,
-                        additional_action: AdditionalAction::UpdateFeeds,
-                    },
-                )
-            }
-
             match self.feeds_display.show(ui) {
                 FeedListDisplayResponse::None => {} // Nothing to do
                 FeedListDisplayResponse::SelectionChanged => {
@@ -151,6 +135,24 @@ impl RssDisplay {
                 }
             }
         });
+    }
+
+    pub fn show_request_update_feeds_button(&self, ui: &mut Ui, requests: &mut Requests) {
+        if ui.button("⟳ Update all feeds").clicked() {
+            requests.new_request_with_json_body(
+                ApiEndpoint::Feeds,
+                FeedsRequest {
+                    filter: self.feeds_display.current_selection(),
+                    entry_filter: if self.show_read_entries {
+                        EntryTypeFilter::All
+                    } else {
+                        EntryTypeFilter::UnreadOnly
+                    },
+                    amount: self.requested_entry_amount,
+                    additional_action: AdditionalAction::UpdateFeeds,
+                },
+            )
+        }
     }
 
     pub fn show_entry_amount_display(&mut self, ui: &mut Ui, requests: &mut Requests) {

@@ -81,7 +81,7 @@ impl FeedListDisplay {
     pub fn show(&mut self, ui: &mut Ui) -> FeedListDisplayResponse {
         let mut response = FeedListDisplayResponse::None;
 
-        if ui.button("Add feed").clicked() && self.add_feed_popup.is_none() {
+        if ui.button("➕ Add feed").clicked() && self.add_feed_popup.is_none() {
             self.add_feed_popup = Some(AddFeedPopup::new(self.known_tags.clone()));
         }
 

@@ -4,6 +4,7 @@ use crate::rss_collection::RssDisplay;
 use eframe::Frame;
 use egui::{Align2, Context, Ui, Vec2, Visuals};
 use log::info;
+use rss_com_lib::message_body::FeedsRequest;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -57,16 +58,9 @@ impl eframe::App for RssApp {
                     collection.show_feeds_button(ui);
                 }
 
-                if self.requests.has_request(ApiEndpoint::Logout) {
-                    if self.requests.ready(ApiEndpoint::Logout).is_some() {
-                        info!("Logged out");
-                        self.requests.set_authenticated(false);
-                        self.active_view = ActiveView::Login(LoginView::default());
-                    } else {
-                        ui.spinner();
-                    }
-                } else if !at_login_view && ui.button("Log out").clicked() {
-                    self.requests.new_request_without_body(ApiEndpoint::Logout)
+                if let ActiveView::RssCollection(collection) = &mut self.active_view {
+                    collection.show_request_update_feeds_button(ui, &mut self.requests);
+                    collection.show_entry_amount_display(ui, &mut self.requests);
                 }
 
                 ui.separator();
@@ -80,8 +74,16 @@ impl eframe::App for RssApp {
 
                 ui.separator();
 
-                if let ActiveView::RssCollection(collection) = &mut self.active_view {
-                    collection.show_entry_amount_display(ui, &mut self.requests);
+                if self.requests.has_request(ApiEndpoint::Logout) {
+                    if self.requests.ready(ApiEndpoint::Logout).is_some() {
+                        info!("Logged out");
+                        self.requests.set_authenticated(false);
+                        self.active_view = ActiveView::Login(LoginView::default());
+                    } else {
+                        ui.spinner();
+                    }
+                } else if !at_login_view && ui.button("Log out").clicked() {
+                    self.requests.new_request_without_body(ApiEndpoint::Logout)
                 }
             });
         });
